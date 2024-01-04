@@ -88,6 +88,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fd55a5ba1179988837d24ab4c7cc8ed6efdeff578ede0416b4225a5fca35bd0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.46",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1422,15 +1433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "retry_macro"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37d6d1c26a7bfe0fcdee6e1ec0db37e8806a94995592341fa4ff9b5be9738891"
-dependencies = [
- "shadow-clone",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1519,10 +1521,10 @@ checksum = "f98d2aa92eebf49b69786be48e4477826b256916e84a57ff2a4f21923b48eb4c"
 name = "rzd_tg_bot"
 version = "0.1.0"
 dependencies = [
+ "async-recursion",
  "chrono",
  "log",
  "reqwest",
- "retry_macro",
  "serde",
  "serde_json",
  "teloxide",
@@ -1673,12 +1675,6 @@ name = "sha1_smol"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
-
-[[package]]
-name = "shadow-clone"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99e3d62f6165d200916d9918a3ff1f4a28b9e2492a241b2e514961a395fe4adf"
 
 [[package]]
 name = "signal-hook-registry"

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::default::Default;
-use std::string::String;
-use std::thread::sleep;
 use std::time::Duration;
 
+use async_recursion::async_recursion;
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 const BASE_API_URL: &str = "https://ticket.rzd.ru/api/v1";
 const BASE_PASS_URL: &str = "https://pass.rzd.ru";
@@ -47,22 +48,38 @@ pub struct GetRZDTrainsListResponse {
 pub struct GetRZDTrainsResponse {
     pub(crate) tp: Vec<GetRZDTrainsListResponse>,
 }
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetRZDTrainsCarriagesCarsSeats {}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct RIDRequest {
-    #[serde(rename = "RID")]
-    rid: String,
+pub struct GetRZDTrainsCarriagesCars {
+    seats: GetRZDTrainsCarriagesCarsSeats,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetRZDTrainsCarriagesListResponse {
+    pub(crate) cars: Vec<GetRZDTrainsCarriagesCars>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetRZDTrainsCarriagesResponse {
+    pub(crate) lst: Vec<GetRZDTrainsCarriagesListResponse>,
+}
+#[async_recursion]
 pub async fn get_rzd_point_codes(
     part_or_full_name: String,
+    retry_counter: isize,
 ) -> Result<Vec<GetRZDPointCodes>, String> {
+    if retry_counter == -1 {
+        return Err("Error on fetching info from rzd".to_string());
+    }
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
+        .user_agent(USER_AGENT)
         .build()
         .unwrap();
 
-    let query: String = part_or_full_name.into();
+    let query: String = part_or_full_name.clone();
     let query_params = vec![
         ("GroupResults", "true"),
         ("RailwaySortPriority", "true"),
@@ -76,13 +93,12 @@ pub async fn get_rzd_point_codes(
             .unwrap();
     let result = client
         .get(url)
-        .header("User-Agent", USER_AGENT)
-        .header("Accept", "application/json")
+        .header(ACCEPT, "application/json")
         .send()
         .await;
 
-    if let Err(err) = result {
-        return Err(format!("Error on fetching info from rzd {}", err));
+    if result.is_err() {
+        return get_rzd_point_codes(part_or_full_name.clone(), retry_counter - 1).await;
     }
 
     let r = result.unwrap();
@@ -103,14 +119,19 @@ pub async fn get_rzd_point_codes(
         }
     };
 }
-
+#[async_recursion]
 pub async fn get_trains_from_rzd(
     point_from: String,
     point_to: String,
     date: String,
+    retry_counter: isize,
 ) -> Result<GetRZDTrainsResponse, String> {
+    if retry_counter == -1 {
+        return Err("Error on fetching info from rzd".to_string());
+    }
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
+        .user_agent(USER_AGENT)
         .build()
         .unwrap();
     let query_params = vec![
@@ -118,9 +139,9 @@ pub async fn get_trains_from_rzd(
         ("dir", "0".to_string()),
         ("tfl", "1".to_string()),
         ("checkSeats", "1".to_string()),
-        ("code0", point_from),
-        ("code1", point_to),
-        ("dt0", date),
+        ("code0", point_from.clone()),
+        ("code1", point_to.clone()),
+        ("dt0", date.clone()),
         ("md", "0".to_string()),
     ];
     let url = reqwest::Url::parse_with_params(
@@ -130,12 +151,17 @@ pub async fn get_trains_from_rzd(
     .unwrap();
     let result = client
         .get(url)
-        .header("User-Agent", USER_AGENT)
-        .header("Accept", "application/json")
+        .header(ACCEPT, "application/json")
         .send()
         .await;
-    if let Err(err) = result {
-        return Err(format!("Error on fetching info from rzd {}", err));
+    if result.is_err() {
+        return get_trains_from_rzd(
+            point_from.clone(),
+            point_to.clone(),
+            date.clone(),
+            retry_counter - 1,
+        )
+        .await;
     }
 
     let r = result.unwrap();
@@ -158,10 +184,16 @@ pub async fn get_trains_from_rzd(
     if rid_response.get("RID").is_none() {
         if rid_response
             .get("result")
-            .unwrap_or(&serde_json::Value::String("".to_string()))
-            .eq(&serde_json::Value::String("FAIL".to_string()))
+            .unwrap_or(&json!(""))
+            .eq(&json!("FAIL"))
         {
-            return Err("Error on fetching info from rzd".to_string());
+            return get_trains_from_rzd(
+                point_from.clone(),
+                point_to.clone(),
+                date.clone(),
+                retry_counter - 1,
+            )
+            .await;
         }
         return match serde_json::from_str::<GetRZDTrainsResponse>(response_string.as_str()) {
             Ok(v) => return Ok(v),
@@ -171,6 +203,7 @@ pub async fn get_trains_from_rzd(
 
     let mut c = 0;
     let rid = rid_response.get("RID").unwrap().as_i64().unwrap();
+
     loop {
         let query_params = vec![("layer_id", ROUTES_LAYER.to_string())];
         let url = reqwest::Url::parse_with_params(
@@ -181,14 +214,20 @@ pub async fn get_trains_from_rzd(
 
         let result = client
             .post(url)
-            .header("User-Agent", USER_AGENT)
-            .header("Accept", "application/json")
+            .header(ACCEPT, "application/json")
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .body(format!("rid={rid}"))
             .send()
             .await;
 
-        if let Err(err) = result {
-            return Err(format!("Error on fetching info from rzd {}", err));
+        if result.is_err() {
+            return get_trains_from_rzd(
+                point_from.clone(),
+                point_to.clone(),
+                date.clone(),
+                retry_counter - 1,
+            )
+            .await;
         }
 
         let r = result.unwrap();
@@ -212,12 +251,180 @@ pub async fn get_trains_from_rzd(
         if rid_response.get("RID").is_none() {
             if rid_response
                 .get("result")
-                .unwrap_or(&serde_json::Value::String("".to_string()))
-                .eq(&serde_json::Value::String("FAIL".to_string()))
+                .unwrap_or(&json!("".to_string()))
+                .eq(&json!("FAIL"))
             {
-                return Err("Error on fetching info from rzd".to_string());
+                return get_trains_from_rzd(
+                    point_from.clone(),
+                    point_to.clone(),
+                    date.clone(),
+                    retry_counter - 1,
+                )
+                .await;
             }
             return match serde_json::from_str::<GetRZDTrainsResponse>(response_string.as_str()) {
+                Ok(v) => return Ok(v),
+                Err(err) => Err(format!("Error on deserialize json {}", err)),
+            };
+        }
+        c += 1;
+
+        if c > 5 {
+            return Err("Cant fetch data from rzd".to_string());
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
+#[async_recursion]
+pub async fn get_trains_carriages_from_rzd(
+    point_from: String,
+    point_to: String,
+    dt0: String,
+    time0: String,
+    tnum0: String,
+    retry_counter: isize,
+) -> Result<GetRZDTrainsCarriagesResponse, String> {
+    if retry_counter == -1 {
+        return Err("Error on fetching info from rzd".to_string());
+    }
+    let client = reqwest::ClientBuilder::new()
+        .cookie_store(true)
+        .user_agent(USER_AGENT)
+        .build()
+        .unwrap();
+    let query_params = vec![
+        ("layer_id", CARRIEAGES_LAYER.to_string()),
+        ("dir", "0".to_string()),
+        ("code0", point_from.clone()),
+        ("code1", point_to.clone()),
+        ("dt0", dt0.clone()),
+        ("time0", time0.clone()),
+        ("tnum0", tnum0.clone()),
+    ];
+    let url = reqwest::Url::parse_with_params(
+        &(BASE_PASS_URL.to_owned() + "/timetable/public/ru"),
+        &query_params,
+    )
+    .unwrap();
+    let result = client
+        .get(url)
+        .header(ACCEPT, "application/json")
+        .send()
+        .await;
+    if result.is_err() {
+        return get_trains_carriages_from_rzd(
+            point_from.clone(),
+            point_to.clone(),
+            dt0.clone(),
+            time0.clone(),
+            tnum0.clone(),
+            retry_counter - 1,
+        )
+        .await;
+    }
+
+    let r = result.unwrap();
+    if r.status() != 200 {
+        return Err(format!("Invalid response code from rzd {}", r.status()));
+    }
+    let response_string_result = r.text().await;
+    if let Err(err) = response_string_result {
+        return Err(format!("Error on getting response bytes {}", err));
+    }
+    let response_string = response_string_result.unwrap();
+    let rid_response_result =
+        serde_json::from_str::<HashMap<String, serde_json::Value>>(response_string.as_str());
+
+    if let Err(err) = rid_response_result {
+        return Err(format!("Error on deserialize json {}", err));
+    }
+
+    let rid_response = rid_response_result.unwrap();
+    if rid_response.get("RID").is_none() {
+        if rid_response
+            .get("result")
+            .unwrap_or(&json!(""))
+            .eq(&json!("FAIL"))
+        {
+            return get_trains_carriages_from_rzd(
+                point_from.clone(),
+                point_to.clone(),
+                dt0.clone(),
+                time0.clone(),
+                tnum0.clone(),
+                retry_counter - 1,
+            )
+            .await;
+        }
+        return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(response_string.as_str())
+        {
+            Ok(v) => return Ok(v),
+            Err(err) => Err(format!("Error on deserialize json {}", err)),
+        };
+    }
+
+    let mut c = 0;
+    let rid = rid_response.get("RID").unwrap().as_i64().unwrap();
+
+    loop {
+        let result = client
+            .post(&(BASE_PASS_URL.to_owned() + "/timetable/public/ru"))
+            .header(ACCEPT, "application/json")
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(format!("rid={rid}&layer_id={CARRIEAGES_LAYER}&dir=0&code0={point_from}&code1={point_to}&dt0={dt0}&time0={time0}&tnum0={tnum0}"))
+            .send()
+            .await;
+
+        if result.is_err() {
+            return get_trains_carriages_from_rzd(
+                point_from.clone(),
+                point_to.clone(),
+                dt0.clone(),
+                time0.clone(),
+                tnum0.clone(),
+                retry_counter - 1,
+            )
+            .await;
+        }
+
+        let r = result.unwrap();
+        if r.status() != 200 {
+            return Err(format!("Invalid response code from rzd {}", r.status()));
+        }
+
+        let response_string_result = r.text().await;
+        if let Err(err) = response_string_result {
+            return Err(format!("Error on getting response bytes {}", err));
+        }
+        let response_string = response_string_result.unwrap();
+        let rid_response_result =
+            serde_json::from_str::<HashMap<String, serde_json::Value>>(response_string.as_str());
+
+        if let Err(err) = rid_response_result {
+            return Err(format!("Error on deserialize json {}", err));
+        }
+
+        let rid_response = rid_response_result.unwrap();
+        if rid_response.get("RID").is_none() {
+            if rid_response
+                .get("result")
+                .unwrap_or(&json!("".to_string()))
+                .eq(&json!("FAIL"))
+            {
+                return get_trains_carriages_from_rzd(
+                    point_from.clone(),
+                    point_to.clone(),
+                    dt0.clone(),
+                    time0.clone(),
+                    tnum0.clone(),
+                    retry_counter - 1,
+                )
+                .await;
+            }
+            return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(
+                response_string.as_str(),
+            ) {
                 Ok(v) => return Ok(v),
                 Err(err) => Err(format!("Error on deserialize json {}", err)),
             };
