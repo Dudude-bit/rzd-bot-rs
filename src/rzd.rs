@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use async_recursion::async_recursion;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 
 const BASE_API_URL: &str = "https://ticket.rzd.ru/api/v1";
@@ -12,6 +12,17 @@ const BASE_PASS_URL: &str = "https://pass.rzd.ru";
 const ROUTES_LAYER: usize = 5827;
 const CARRIEAGES_LAYER: usize = 5764;
 const USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36";
+
+fn places_deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let str_sequence = String::deserialize(deserializer)?;
+    Ok(str_sequence
+        .split(',')
+        .map(|item| item.to_owned())
+        .collect())
+}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetRZDPointCodes {
     #[serde(rename = "expressCode")]
@@ -48,12 +59,14 @@ pub struct GetRZDTrainsListResponse {
 pub struct GetRZDTrainsResponse {
     pub(crate) tp: Vec<GetRZDTrainsListResponse>,
 }
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetRZDTrainsCarriagesCarsSeats {}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetRZDTrainsCarriagesCars {
-    seats: GetRZDTrainsCarriagesCarsSeats,
+    #[serde(deserialize_with = "places_deserialize")]
+    pub(crate) places: Vec<String>,
+    pub(crate) cnumber: String,
+    #[serde(rename = "type")]
+    pub(crate) _type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -173,8 +186,11 @@ pub async fn get_trains_from_rzd(
         return Err(format!("Error on getting response bytes {}", err));
     }
     let response_string = response_string_result.unwrap();
-    let rid_response_result =
-        serde_json::from_str::<HashMap<String, serde_json::Value>>(response_string.as_str());
+    let rid_response_result = serde_json::from_str::<HashMap<String, serde_json::Value>>(
+        response_string
+            .as_str()
+            .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+    );
 
     if let Err(err) = rid_response_result {
         return Err(format!("Error on deserialize json {}", err));
@@ -195,14 +211,18 @@ pub async fn get_trains_from_rzd(
             )
             .await;
         }
-        return match serde_json::from_str::<GetRZDTrainsResponse>(response_string.as_str()) {
+        return match serde_json::from_str::<GetRZDTrainsResponse>(
+            response_string
+                .as_str()
+                .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+        ) {
             Ok(v) => return Ok(v),
             Err(err) => Err(format!("Error on deserialize json {}", err)),
         };
     }
 
     let mut c = 0;
-    let rid = rid_response.get("RID").unwrap().as_i64().unwrap();
+    let rid = rid_response.get("RID").unwrap();
 
     loop {
         let query_params = vec![("layer_id", ROUTES_LAYER.to_string())];
@@ -240,8 +260,11 @@ pub async fn get_trains_from_rzd(
             return Err(format!("Error on getting response bytes {}", err));
         }
         let response_string = response_string_result.unwrap();
-        let rid_response_result =
-            serde_json::from_str::<HashMap<String, serde_json::Value>>(response_string.as_str());
+        let rid_response_result = serde_json::from_str::<HashMap<String, serde_json::Value>>(
+            response_string
+                .as_str()
+                .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+        );
 
         if let Err(err) = rid_response_result {
             return Err(format!("Error on deserialize json {}", err));
@@ -262,7 +285,11 @@ pub async fn get_trains_from_rzd(
                 )
                 .await;
             }
-            return match serde_json::from_str::<GetRZDTrainsResponse>(response_string.as_str()) {
+            return match serde_json::from_str::<GetRZDTrainsResponse>(
+                response_string
+                    .as_str()
+                    .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+            ) {
                 Ok(v) => return Ok(v),
                 Err(err) => Err(format!("Error on deserialize json {}", err)),
             };
@@ -333,8 +360,11 @@ pub async fn get_trains_carriages_from_rzd(
         return Err(format!("Error on getting response bytes {}", err));
     }
     let response_string = response_string_result.unwrap();
-    let rid_response_result =
-        serde_json::from_str::<HashMap<String, serde_json::Value>>(response_string.as_str());
+    let rid_response_result = serde_json::from_str::<HashMap<String, serde_json::Value>>(
+        response_string
+            .as_str()
+            .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+    );
 
     if let Err(err) = rid_response_result {
         return Err(format!("Error on deserialize json {}", err));
@@ -357,15 +387,18 @@ pub async fn get_trains_carriages_from_rzd(
             )
             .await;
         }
-        return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(response_string.as_str())
-        {
+        return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(
+            response_string
+                .as_str()
+                .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+        ) {
             Ok(v) => return Ok(v),
             Err(err) => Err(format!("Error on deserialize json {}", err)),
         };
     }
 
     let mut c = 0;
-    let rid = rid_response.get("RID").unwrap().as_i64().unwrap();
+    let rid = rid_response.get("RID").unwrap();
 
     loop {
         let result = client
@@ -398,8 +431,11 @@ pub async fn get_trains_carriages_from_rzd(
             return Err(format!("Error on getting response bytes {}", err));
         }
         let response_string = response_string_result.unwrap();
-        let rid_response_result =
-            serde_json::from_str::<HashMap<String, serde_json::Value>>(response_string.as_str());
+        let rid_response_result = serde_json::from_str::<HashMap<String, serde_json::Value>>(
+            response_string
+                .as_str()
+                .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
+        );
 
         if let Err(err) = rid_response_result {
             return Err(format!("Error on deserialize json {}", err));
@@ -423,7 +459,9 @@ pub async fn get_trains_carriages_from_rzd(
                 .await;
             }
             return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(
-                response_string.as_str(),
+                response_string
+                    .as_str()
+                    .trim_matches(|c: char| c.is_whitespace() || c == '\"'),
             ) {
                 Ok(v) => return Ok(v),
                 Err(err) => Err(format!("Error on deserialize json {}", err)),

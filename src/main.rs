@@ -1,7 +1,14 @@
+mod db;
 mod rzd;
 
+use std::env;
+use std::fs::File;
+use std::path::Path;
+
 use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_from_rzd};
+
 use chrono::NaiveDate;
+use sqlx::sqlite::SqlitePool;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
@@ -19,6 +26,9 @@ type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 enum Command {
     Start,
     Cancel,
+    PollDay,
+    PollTrain,
+    Niggers
 }
 
 #[derive(Debug, Clone)]
@@ -55,10 +65,24 @@ pub enum State {
 async fn main() {
     log::info!("Starting rzd bot");
 
+    let mut db_path = env::var("db_path").unwrap_or_default();
+    if db_path.is_empty() {
+        log::info!("DB_PATH is empty. Creating default file db.db");
+        db_path = "db.db".to_string();
+    }
+
+    if !Path::exists(db_path.clone().as_ref()) {
+        log::info!("{}", format!("DB_PATH {db_path} does not exists, creating"));
+        File::create(db_path.clone()).expect("Cant create db file");
+    }
+
+    let connection = SqlitePool::connect(db_path.as_str())
+        .await
+        .expect("Cant connect to sqlite pool");
     let bot = Bot::from_env();
 
     Dispatcher::builder(bot, schema())
-        .dependencies(dptree::deps![InMemStorage::<State>::new()])
+        .dependencies(dptree::deps![InMemStorage::<State>::new(), connection])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -70,7 +94,11 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Start].endpoint(start))
-        .branch(case![Command::Cancel].endpoint(cancel));
+        .branch(case![Command::Cancel].endpoint(cancel))
+        .branch(
+            case![Command::PollDay].branch(case![State::ChooseTrain { trains }].endpoint(poll_day)),
+        )
+        .branch(case![Command::Niggers].endpoint(niggers));
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
@@ -338,20 +366,103 @@ async fn receive_train_idx(
                 5,
             )
             .await;
-            if let Err(err) = carriages {
-                bot.send_message(
-                    msg.chat.id,
-                    format!(
-                        "Error on getting rzd train carriages {err}. Current dialogue canceled"
-                    ),
-                )
-                .await?;
-                dialogue.reset().await?;
+            match carriages {
+                Ok(v) => {
+                    let mut message_text: String = String::new();
+                    for car in v.lst[0].cars.iter() {
+                        if car._type.to_lowercase() != CUPE_TYPE {
+                            continue;
+                        }
+                        for place in car.places.iter() {
+                            let places_ref = place.split('-').collect::<Vec<&str>>();
+                            if places_ref.len() != 2 {
+                                continue;
+                            }
+                            let (start_place, end_place) = (
+                                places_ref[0]
+                                    .trim_end_matches(|c: char| c.is_alphabetic())
+                                    .parse::<isize>()
+                                    .unwrap(),
+                                places_ref[1]
+                                    .trim_end_matches(|c: char| c.is_alphabetic())
+                                    .parse::<isize>()
+                                    .unwrap(),
+                            );
+                            if start_place > end_place {
+                                // TODO add logging
+                                continue;
+                            }
+                            println!("{} - {} / {}", start_place, end_place, car.cnumber);
+                            for place_n in start_place..=end_place {
+                                if place_n % 4 == 1 && end_place - place_n >= 3 {
+                                    // Blyat ya ne vspomnu cherez god logiku
+                                    message_text.push_str(
+                                        format!(
+                                            "Номер вагона: {}\nНомер мест: {} - {}\n",
+                                            car.cnumber,
+                                            place_n,
+                                            place_n + 3
+                                        )
+                                        .as_str(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if message_text.is_empty() {
+                        bot.send_message(
+                            msg.chat.id,
+                            "Not found. Please type /start to try again. Current dialogue reseted",
+                        )
+                        .await?;
+                        dialogue.reset().await?;
+                    } else {
+                        bot.send_message(msg.chat.id, message_text + "Current dialogue reseted")
+                            .await?;
+                        dialogue.reset().await?;
+                    }
+                }
+                Err(err) => {
+                    bot.send_message(
+                        msg.chat.id,
+                        format!(
+                            "Error on getting rzd train carriages {err}. Current dialogue canceled"
+                        ),
+                    )
+                    .await?;
+                    dialogue.reset().await?;
+                }
             }
         }
         None => {
             bot.send_message(msg.chat.id, "Send me plain text.").await?;
         }
     }
+    Ok(())
+}
+
+async fn poll_day(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    trains: Vec<Train>,
+    msg: Message,
+) -> HandlerResult {
+    Ok(())
+}
+
+async fn poll_train(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    trains: Vec<Train>,
+    msg: Message,
+) -> HandlerResult {
+    Ok(())
+}
+
+async fn niggers(
+    bot: Bot,
+    msg: Message
+) -> HandlerResult {
+    bot.send_message(msg.chat.id, "Негры пидорасы").await?;
     Ok(())
 }
