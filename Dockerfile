@@ -1,0 +1,5 @@
+FROM rust
+
+COPY . .
+ENV TELOXIDE_TOKEN=6814893915:AAHX9A7jlEsZj957b40rNLBwVTPzBMtol_k
+CMD cargo run --release
