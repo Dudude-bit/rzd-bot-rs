@@ -15,6 +15,7 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
+use teloxide::types::InputFile;
 
 const CUPE_TYPE: &str = "купе";
 
@@ -26,9 +27,9 @@ type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 enum Command {
     Start,
     Cancel,
-    PollDay,
-    PollTrain,
-    Niggers
+    Niggers,
+    Dimok,
+    Ss
 }
 
 #[derive(Debug, Clone)]
@@ -63,8 +64,6 @@ pub enum State {
 
 #[tokio::main]
 async fn main() {
-    log::info!("Starting rzd bot");
-
     let mut db_path = env::var("db_path").unwrap_or_default();
     if db_path.is_empty() {
         log::info!("DB_PATH is empty. Creating default file db.db");
@@ -95,10 +94,9 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Start].endpoint(start))
         .branch(case![Command::Cancel].endpoint(cancel))
-        .branch(
-            case![Command::PollDay].branch(case![State::ChooseTrain { trains }].endpoint(poll_day)),
-        )
-        .branch(case![Command::Niggers].endpoint(niggers));
+        .branch(case![Command::Niggers].endpoint(niggers))
+        .branch(case![Command::Dimok].endpoint(dimok))
+        .branch(case![Command::Ss].endpoint(ss));
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
@@ -115,7 +113,8 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let callback_query_handler = Update::filter_callback_query()
         .branch(case![State::ChooseFromPointCode].endpoint(choose_from_point_code))
-        .branch(case![State::ChooseToPointCode { from_point_code }].endpoint(choose_to_point_code));
+        .branch(case![State::ChooseToPointCode { from_point_code }].endpoint(choose_to_point_code))
+        .branch(case![State::ChooseTrain { trains }].endpoint(poll_day));
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(message_handler)
@@ -258,7 +257,7 @@ async fn receive_date(
             let date = NaiveDate::parse_from_str(date, "%d.%m.%Y");
             match date {
                 Ok(date) => {
-                    // Compare time if less -> error
+                    // TODO check if date not less than now
                     let trains = get_trains_from_rzd(
                         from_point_code.clone(),
                         to_point_code.clone(),
@@ -296,7 +295,17 @@ async fn receive_date(
                                 bot.send_message(msg.chat.id, "Not found. Please type /start to try again. Current dialogue reseted").await?;
                                 dialogue.reset().await?;
                             } else {
-                                bot.send_message(msg.chat.id, message_text).await?;
+                                let mut reply_markup = Vec::new();
+                                reply_markup.push(InlineKeyboardButton::callback(
+                                    "Poll this day",
+                                    format!(
+                                        "{from_point_code}_{to_point_code}_{}",
+                                        date.format("%d.%m.%Y").to_string()
+                                    ),
+                                ));
+                                bot.send_message(msg.chat.id, message_text)
+                                    .reply_markup(InlineKeyboardMarkup::new([reply_markup]))
+                                    .await?;
                                 dialogue
                                     .update(State::ChooseTrain {
                                         trains: trains_state,
@@ -444,25 +453,45 @@ async fn receive_train_idx(
 async fn poll_day(
     bot: Bot,
     dialogue: RZDDialogue,
-    trains: Vec<Train>,
-    msg: Message,
+    q: CallbackQuery,
 ) -> HandlerResult {
+    if let Some(data) = &q.data {
+
+    }
     Ok(())
 }
 
 async fn poll_train(
     bot: Bot,
     dialogue: RZDDialogue,
-    trains: Vec<Train>,
-    msg: Message,
+    q: CallbackQuery,
 ) -> HandlerResult {
+    if let Some(data) = &q.data {
+        println!("{}", data);
+    }
     Ok(())
 }
 
-async fn niggers(
-    bot: Bot,
-    msg: Message
-) -> HandlerResult {
+async fn niggers(bot: Bot, msg: Message) -> HandlerResult {
     bot.send_message(msg.chat.id, "Негры пидорасы").await?;
+    Ok(())
+}
+
+async fn dimok(bot: Bot, msg: Message) -> HandlerResult {
+    bot.send_message(
+        msg.chat.id, include_str!("static/dimok.txt"),
+    )
+    .await?;
+    bot.send_audio(msg.chat.id, InputFile::memory(include_bytes!("static/дымок.mp3").as_slice()).file_name("Дымок")).await?;
+    Ok(())
+}
+
+async fn ss(bot: Bot, msg: Message) -> HandlerResult {
+    bot.send_message(
+        msg.chat.id, include_str!("static/гимн_люфтваффе.txt"),
+    )
+        .await?;
+
+    bot.send_audio(msg.chat.id, InputFile::memory(include_bytes!("static/гимн_люфтваффе.mp3").as_slice()).file_name("Гимн люфтваффе")).await?;
     Ok(())
 }
