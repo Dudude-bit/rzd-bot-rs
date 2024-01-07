@@ -1,4 +1,4 @@
-FROM rust:1.75-slim-buster
+FROM rust:1.75-slim-buster as build
 
 # create a new empty shell project
 RUN USER=root cargo new --bin rzd_tg_bot
