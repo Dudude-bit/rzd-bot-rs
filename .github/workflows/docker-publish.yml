@@ -58,4 +58,4 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
-          script: docker login --username ${{ secrets.REGISTRY_USERNAME }} --password ${{ secrets.REGISTRY_PASSWORD }} && TELOXIDE_TOKEN=${{ secrets.TELOXIDE_TOKEN }} REGISTRY=${{ env.REGISTRY }} IMAGE_NAME=${{ env.IMAGE_NAME }} docker compose up -d --pull always --file /root/devops/docker/docker-compose.yml rzd_bot
+          script: docker login --username ${{ secrets.REGISTRY_USERNAME }} --password ${{ secrets.REGISTRY_PASSWORD }} ${{ env.REGISTRY }} && TELOXIDE_TOKEN=${{ secrets.TELOXIDE_TOKEN }} REGISTRY=${{ env.REGISTRY }} IMAGE_NAME=${{ env.IMAGE_NAME }} docker compose up -d --pull always --file /root/devops/docker/docker-compose.yml rzd_bot
