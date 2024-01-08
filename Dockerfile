@@ -21,7 +21,7 @@ RUN cargo build --release
 
 # our final base
 FROM debian:buster-slim
-RUN apt-get update && apt-get install -y libssl-dev
+RUN apt-get update && apt-get install -y libssl-dev ca-certificates && update-ca-certificates
 # copy the build artifact from the build stage
 COPY --from=build /rzd_tg_bot/target/release/rzd_tg_bot .
 
