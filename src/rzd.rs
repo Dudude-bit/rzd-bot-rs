@@ -7,13 +7,12 @@ use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
+use fake_useragent::{UserAgentsBuilder, Browsers};
 
 const BASE_API_URL: &str = "https://ticket.rzd.ru/api/v1";
 const BASE_PASS_URL: &str = "https://pass.rzd.ru";
 const ROUTES_LAYER: usize = 5827;
 const CARRIEAGES_LAYER: usize = 5764;
-const USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36";
-
 fn places_deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
@@ -87,9 +86,11 @@ pub async fn get_rzd_point_codes(
     if retry_counter == -1 {
         return Err("Error on fetching info from rzd".to_string());
     }
+
+    let user_agents = UserAgentsBuilder::new().set_browsers(Browsers::new().set_chrome().set_edge().set_firefox()).build();
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
-        .user_agent(USER_AGENT)
+        .user_agent(user_agents.random())
         .build()
         .unwrap();
 
@@ -147,9 +148,10 @@ pub async fn get_trains_from_rzd(
     if retry_counter == -1 {
         return Err("Error on fetching info from rzd".to_string());
     }
+    let user_agents = UserAgentsBuilder::new().set_browsers(Browsers::new().set_chrome().set_edge().set_firefox()).build();
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
-        .user_agent(USER_AGENT)
+        .user_agent(user_agents.random())
         .build()
         .unwrap();
     let query_params = vec![
@@ -340,9 +342,10 @@ pub async fn get_trains_carriages_from_rzd(
     if retry_counter == -1 {
         return Err("Error on fetching info from rzd".to_string());
     }
+    let user_agents = UserAgentsBuilder::new().set_browsers(Browsers::new().set_chrome().set_edge().set_firefox()).build();
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
-        .user_agent(USER_AGENT)
+        .user_agent(user_agents.random())
         .build()
         .unwrap();
     let query_params = vec![
