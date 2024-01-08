@@ -64,25 +64,25 @@ pub enum State {
 
 #[tokio::main]
 async fn main() {
-    // let mut db_path = env::var("DB_PATH").unwrap_or_default();
-    // if db_path.is_empty() {
-    //     log::info!("DB_PATH is empty. Creating default file db.db");
-    //     db_path = "db.db".to_string();
-    // }
-    //
-    // if !Path::exists(db_path.clone().as_ref()) {
-    //     log::info!("DB_PATH {db_path} does not exists, creating");
-    //     File::create(db_path.clone()).expect("Cant create db file");
-    // }
-    //
-    // let connection = SqlitePool::connect(db_path.as_str())
-    //     .await
-    //     .expect("Cant connect to sqlite pool");
-    //
-    // sqlx::migrate!("./migrations/")
-    //     .run(&connection)
-    //     .await
-    //     .expect("cant execute migrations");
+    let mut db_path = env::var("DB_PATH").unwrap_or_default();
+    if db_path.is_empty() {
+        log::info!("DB_PATH is empty. Creating default file db.db");
+        db_path = "db.db".to_string();
+    }
+
+    if !Path::exists(db_path.clone().as_ref()) {
+        log::info!("DB_PATH {db_path} does not exists, creating");
+        File::create(db_path.clone()).expect("Cant create db file");
+    }
+
+    let connection = SqlitePool::connect(db_path.as_str())
+        .await
+        .expect("Cant connect to sqlite pool");
+
+    sqlx::migrate!("./migrations/")
+        .run(&connection)
+        .await
+        .expect("cant execute migrations");
     log::info!("migrations has been executed");
 
     let bot = Bot::from_env();
