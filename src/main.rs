@@ -9,13 +9,13 @@ use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_
 
 use chrono::NaiveDate;
 use sqlx::sqlite::SqlitePool;
+use teloxide::types::InputFile;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
-use teloxide::types::InputFile;
 
 const CUPE_TYPE: &str = "купе";
 
@@ -29,7 +29,7 @@ enum Command {
     Cancel,
     Niggers,
     Dimok,
-    Ss
+    Ss,
 }
 
 #[derive(Debug, Clone)]
@@ -71,17 +71,23 @@ async fn main() {
     }
 
     if !Path::exists(db_path.clone().as_ref()) {
-        log::info!("{}", format!("DB_PATH {db_path} does not exists, creating"));
+        log::info!("DB_PATH {db_path} does not exists, creating");
         File::create(db_path.clone()).expect("Cant create db file");
     }
 
     let connection = SqlitePool::connect(db_path.as_str())
         .await
         .expect("Cant connect to sqlite pool");
-    // sqlx::migrate!("./migrations/").run(&connection).await?;
+
+    sqlx::migrate!("./migrations/")
+        .run(&connection)
+        .await
+        .expect("cant execute migrations");
+    log::info!("migrations has been executed");
 
     let bot = Bot::from_env();
 
+    log::info!("bot is starting");
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![InMemStorage::<State>::new(), connection])
         .enable_ctrlc_handler()
@@ -452,22 +458,12 @@ async fn receive_train_idx(
     Ok(())
 }
 
-async fn poll_day(
-    bot: Bot,
-    dialogue: RZDDialogue,
-    q: CallbackQuery,
-) -> HandlerResult {
-    if let Some(data) = &q.data {
-
-    }
+async fn poll_day(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
+    if let Some(data) = &q.data {}
     Ok(())
 }
 
-async fn poll_train(
-    bot: Bot,
-    dialogue: RZDDialogue,
-    q: CallbackQuery,
-) -> HandlerResult {
+async fn poll_train(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
     if let Some(data) = &q.data {
         println!("{}", data);
     }
@@ -480,20 +476,25 @@ async fn niggers(bot: Bot, msg: Message) -> HandlerResult {
 }
 
 async fn dimok(bot: Bot, msg: Message) -> HandlerResult {
-    bot.send_message(
-        msg.chat.id, include_str!("static/dimok.txt"),
+    bot.send_message(msg.chat.id, include_str!("static/dimok.txt"))
+        .await?;
+    bot.send_audio(
+        msg.chat.id,
+        InputFile::memory(include_bytes!("static/дымок.mp3").as_slice()).file_name("Дымок"),
     )
     .await?;
-    bot.send_audio(msg.chat.id, InputFile::memory(include_bytes!("static/дымок.mp3").as_slice()).file_name("Дымок")).await?;
     Ok(())
 }
 
 async fn ss(bot: Bot, msg: Message) -> HandlerResult {
-    bot.send_message(
-        msg.chat.id, include_str!("static/гимн_люфтваффе.txt"),
-    )
+    bot.send_message(msg.chat.id, include_str!("static/гимн_люфтваффе.txt"))
         .await?;
 
-    bot.send_audio(msg.chat.id, InputFile::memory(include_bytes!("static/гимн_люфтваффе.mp3").as_slice()).file_name("Гимн люфтваффе")).await?;
+    bot.send_audio(
+        msg.chat.id,
+        InputFile::memory(include_bytes!("static/гимн_люфтваффе.mp3").as_slice())
+            .file_name("Гимн люфтваффе"),
+    )
+    .await?;
     Ok(())
 }

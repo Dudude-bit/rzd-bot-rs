@@ -3,6 +3,7 @@ use std::default::Default;
 use std::time::Duration;
 
 use async_recursion::async_recursion;
+use http::StatusCode;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
@@ -116,6 +117,10 @@ pub async fn get_rzd_point_codes(
 
     let r = result.unwrap();
     if r.status() != 200 {
+        log::warn!("got {} from rzd in function get_rzd_point_codes with params: part_or_full_name = {}, retry_counter = {}", r.status(), part_or_full_name, retry_counter);
+        if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+            return get_rzd_point_codes(part_or_full_name.clone(), retry_counter - 1).await;
+        }
         return Err(format!("Invalid response code from rzd {}", r.status()));
     }
 
@@ -179,6 +184,16 @@ pub async fn get_trains_from_rzd(
 
     let r = result.unwrap();
     if r.status() != 200 {
+        log::warn!("got {} from rzd in function get_trains_from_rzd with params: point_from = {}, point_to = {}, date = {}, retry_counter = {}", r.status(), point_from, point_to, date, retry_counter);
+        if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+            return get_trains_from_rzd(
+                point_from.clone(),
+                point_to.clone(),
+                date.clone(),
+                retry_counter - 1,
+            )
+            .await;
+        }
         return Err(format!("Invalid response code from rzd {}", r.status()));
     }
     let response_string_result = r.text().await;
@@ -252,6 +267,16 @@ pub async fn get_trains_from_rzd(
 
         let r = result.unwrap();
         if r.status() != 200 {
+            log::warn!("got {} from rzd in function get_trains_from_rzd with params: point_from = {}, point_to = {}, date = {}, retry_counter = {}", r.status(), point_from, point_to, date, retry_counter);
+            if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+                return get_trains_from_rzd(
+                    point_from.clone(),
+                    point_to.clone(),
+                    date.clone(),
+                    retry_counter - 1,
+                )
+                    .await;
+            }
             return Err(format!("Invalid response code from rzd {}", r.status()));
         }
 
@@ -353,6 +378,17 @@ pub async fn get_trains_carriages_from_rzd(
 
     let r = result.unwrap();
     if r.status() != 200 {
+        log::warn!("got {} from rzd in function get_trains_carriages_from_rzd with params: point_from = {}, point_to = {}, dt0 = {}, time0 = {}, tnum0 = {}, retry_counter = {}", r.status(), point_from, point_to, dt0, time0, tnum0, retry_counter);
+        if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+            return get_trains_carriages_from_rzd(
+                point_from.clone(),
+                point_to.clone(),
+                dt0.clone(),
+                time0.clone(),
+                tnum0.clone(),
+                retry_counter - 1,
+            ).await
+        }
         return Err(format!("Invalid response code from rzd {}", r.status()));
     }
     let response_string_result = r.text().await;
@@ -423,6 +459,17 @@ pub async fn get_trains_carriages_from_rzd(
 
         let r = result.unwrap();
         if r.status() != 200 {
+            log::warn!("got {} from rzd in function get_trains_carriages_from_rzd with params: point_from = {}, point_to = {}, dt0 = {}, time0 = {}, tnum0 = {}, retry_counter = {}", r.status(), point_from, point_to, dt0, time0, tnum0, retry_counter);
+            if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+                return get_trains_carriages_from_rzd(
+                    point_from.clone(),
+                    point_to.clone(),
+                    dt0.clone(),
+                    time0.clone(),
+                    tnum0.clone(),
+                    retry_counter - 1,
+                ).await
+            }
             return Err(format!("Invalid response code from rzd {}", r.status()));
         }
 
