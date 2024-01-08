@@ -16,4 +16,3 @@ url = "2.5.0"
 serde = { version = "1.0.194", features = ["derive"] }
 async-recursion = "1.0.5"
 sqlx = { version = "0.7.3", features = ["runtime-tokio-native-tls", "sqlite", "chrono"]}
-http = "1.0.0"

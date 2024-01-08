@@ -3,8 +3,8 @@ use std::default::Default;
 use std::time::Duration;
 
 use async_recursion::async_recursion;
-use http::StatusCode;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
+use reqwest::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 
