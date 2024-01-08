@@ -15,6 +15,7 @@ use teloxide::{
     utils::command::BotCommands,
 };
 use env_logger;
+use log::LevelFilter;
 
 use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_from_rzd};
 
@@ -65,7 +66,7 @@ pub enum State {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    env_logger::builder().filter_level(LevelFilter::Info).init();
     let mut db_path = env::var("DB_PATH").unwrap_or_default();
     if db_path.is_empty() {
         log::info!("DB_PATH is empty. Creating default file db.db");
