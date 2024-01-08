@@ -5,8 +5,6 @@ use std::env;
 use std::fs::File;
 use std::path::Path;
 
-use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_from_rzd};
-
 use chrono::NaiveDate;
 use sqlx::sqlite::SqlitePool;
 use teloxide::types::InputFile;
@@ -16,6 +14,9 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
+use env_logger;
+
+use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_from_rzd};
 
 const CUPE_TYPE: &str = "купе";
 
@@ -64,6 +65,7 @@ pub enum State {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
     let mut db_path = env::var("DB_PATH").unwrap_or_default();
     if db_path.is_empty() {
         log::info!("DB_PATH is empty. Creating default file db.db");
