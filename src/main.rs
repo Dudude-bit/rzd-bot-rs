@@ -64,7 +64,7 @@ pub enum State {
 
 #[tokio::main]
 async fn main() {
-    let mut db_path = env::var("db_path").unwrap_or_default();
+    let mut db_path = env::var("DB_PATH").unwrap_or_default();
     if db_path.is_empty() {
         log::info!("DB_PATH is empty. Creating default file db.db");
         db_path = "db.db".to_string();
