@@ -58,3 +58,13 @@ jobs:
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
           script: docker login --username ${{ secrets.REGISTRY_USERNAME }} --password ${{ secrets.REGISTRY_PASSWORD }} ${{ env.REGISTRY }} && TELOXIDE_TOKEN=${{ secrets.TELOXIDE_TOKEN }} IMAGE="${{ steps.meta.outputs.tags }}" docker compose --file /root/devops/docker/docker-compose.yml up -d --pull always rzd_bot
+
+      - name: Send telegram notification
+        if: always()
+        uses: fjogeleit/http-request-action@v1
+        with:
+          url: "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage"
+          method: "POST"
+          customHeaders: '{"Content-Type": "application/json"}'
+          data: '{"chat_id": "${{ secrets.TELEGRAM_CHAT_ID }}", "parse_mode": "html", "text": "Workflow \"${{github.workflow}}\" of repository ${{github.repository}} done with ${{job.status}} on commit ${{github.sha}}"}'
+

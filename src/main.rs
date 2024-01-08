@@ -78,6 +78,8 @@ async fn main() {
     let connection = SqlitePool::connect(db_path.as_str())
         .await
         .expect("Cant connect to sqlite pool");
+    // sqlx::migrate!("./migrations/").run(&connection).await?;
+
     let bot = Bot::from_env();
 
     Dispatcher::builder(bot, schema())
