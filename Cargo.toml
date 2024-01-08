@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-teloxide = { version = "0.12.2", features = ["full"] }
+teloxide = { version = "0.12.2", features = ["macros", "ctrlc_handler", "webhooks", "webhooks-axum", "cache-me", "native-tls"] }
 chrono = {version = "0.4.31", features = ["default"] }
 tokio = { version = "1.35.1", features = ["rt", "rt-multi-thread", "macros"] }
 log = "0.4.20"
@@ -15,4 +15,4 @@ serde_json = { version = "1.0.110", features = [] }
 url = "2.5.0"
 serde = { version = "1.0.194", features = ["derive"] }
 async-recursion = "1.0.5"
-sqlx = { version = "^0.6", features = ["runtime-tokio-native-tls", "sqlite", "chrono"]}
+sqlx = { version = "0.7.3", features = ["runtime-tokio-native-tls", "sqlite", "chrono"]}
