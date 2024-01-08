@@ -27,6 +27,6 @@ RUN apt-get update && apt-get install -y libssl-dev ca-certificates && update-ca
 WORKDIR /app
 COPY --from=build /rzd_tg_bot/target/release/rzd_tg_bot .
 RUN mkdir ./db
-ENV DB_PATH=db/db.db
+ENV DB_PATH=/app/db/db.db
 # set the startup command to run your binary
 CMD ["./rzd_tg_bot"]
