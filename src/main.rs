@@ -1,12 +1,14 @@
-mod db;
 mod rzd;
 
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::path::Path;
 
 use chrono::NaiveDate;
-use sqlx::sqlite::SqlitePool;
+use env_logger;
+use log::LevelFilter;
+use teloxide::dispatching::dialogue::GetChatId;
 use teloxide::types::InputFile;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
@@ -14,8 +16,6 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
-use env_logger;
-use log::LevelFilter;
 
 use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_from_rzd};
 
@@ -69,23 +69,15 @@ async fn main() {
     env_logger::builder().filter_level(LevelFilter::Info).init();
     let mut db_path = env::var("DB_PATH").unwrap_or_default();
     if db_path.is_empty() {
-        log::info!("DB_PATH is empty. Creating default file db.db");
+        log::warn!("DB_PATH is empty. Creating default file db.db");
         db_path = "db.db".to_string();
     }
 
     if !Path::exists(db_path.clone().as_ref()) {
-        log::info!("DB_PATH {db_path} does not exists, creating");
+        log::warn!("DB_PATH {db_path} does not exists, creating");
         File::create(db_path.clone()).expect("Cant create db file");
     }
 
-    let connection = SqlitePool::connect(db_path.as_str())
-        .await
-        .expect("Cant connect to sqlite pool");
-
-    sqlx::migrate!("./migrations/")
-        .run(&connection)
-        .await
-        .expect("cant execute migrations");
     log::info!("migrations has been executed");
 
     let bot = Bot::from_env();
@@ -101,7 +93,6 @@ async fn main() {
 
 fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
     use dptree::case;
-
 
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Start].endpoint(start))
@@ -185,6 +176,7 @@ async fn choose_from_point_code(
     dialogue: RZDDialogue,
     q: CallbackQuery,
 ) -> HandlerResult {
+    bot.answer_callback_query(q.id).await?;
     if let Some(code) = &q.data {
         bot.send_message(dialogue.chat_id(), "Write to point")
             .await?;
@@ -245,6 +237,7 @@ async fn choose_to_point_code(
     from_point_code: String,
     q: CallbackQuery,
 ) -> HandlerResult {
+    bot.answer_callback_query(q.id).await?;
     if let Some(code) = &q.data {
         bot.send_message(dialogue.chat_id(), "Write a date in format(d.m.y)")
             .await?;
@@ -410,11 +403,11 @@ async fn receive_train_idx(
                                     .unwrap(),
                             );
                             if start_place > end_place {
-                                // TODO add logging
+                                log::warn!("start_place {} is greater than end_place {} with params code0 = {}, code1 = {}, dt0 = {}, time0 = {}, tnum0 = {}", start_place, end_place, train.code0, train.code1, train.dt0, train.time0, train.tnum0);
                                 continue;
                             }
-                            println!("{} - {} / {}", start_place, end_place, car.cnumber);
                             for place_n in start_place..=end_place {
+                                //
                                 if place_n % 4 == 1 && end_place - place_n >= 3 {
                                     // Blyat ya ne vspomnu cherez god logiku
                                     message_text.push_str(
@@ -463,14 +456,20 @@ async fn receive_train_idx(
 }
 
 async fn poll_day(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
-    if let Some(data) = &q.data {}
+    bot.answer_callback_query(q.id).await?;
+    if let Some(data) = &q.data {
+        let splitted_data = data.split('_').collect::<Vec<&str>>();
+        println!("{:?}", splitted_data);
+        if splitted_data.len() != 3 {
+            bot.send_message(dialogue.chat_id(), "Invalid length of callback data")
+                .await?;
+        }
+    }
     Ok(())
 }
 
 async fn poll_train(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
-    if let Some(data) = &q.data {
-        println!("{}", data);
-    }
+    bot.answer_callback_query(q.id).await?;
     Ok(())
 }
 

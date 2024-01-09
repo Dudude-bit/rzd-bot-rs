@@ -3,11 +3,11 @@ use std::default::Default;
 use std::time::Duration;
 
 use async_recursion::async_recursion;
+use fake_useragent::{Browsers, UserAgentsBuilder};
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
-use fake_useragent::{UserAgentsBuilder, Browsers};
 
 const BASE_API_URL: &str = "https://ticket.rzd.ru/api/v1";
 const BASE_PASS_URL: &str = "https://pass.rzd.ru";
@@ -87,7 +87,10 @@ pub async fn get_rzd_point_codes(
         return Err("Error on fetching info from rzd".to_string());
     }
 
-    let user_agents = UserAgentsBuilder::new().set_browsers(Browsers::new().set_chrome().set_edge().set_firefox()).build();
+    let user_agents = UserAgentsBuilder::new()
+        .set_browsers(Browsers::new().set_chrome().set_edge().set_firefox())
+        .cache(false)
+        .build();
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
         .user_agent(user_agents.random())
@@ -148,7 +151,10 @@ pub async fn get_trains_from_rzd(
     if retry_counter == -1 {
         return Err("Error on fetching info from rzd".to_string());
     }
-    let user_agents = UserAgentsBuilder::new().set_browsers(Browsers::new().set_chrome().set_edge().set_firefox()).build();
+    let user_agents = UserAgentsBuilder::new()
+        .set_browsers(Browsers::new().set_chrome().set_edge().set_firefox())
+        .cache(false)
+        .build();
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
         .user_agent(user_agents.random())
@@ -277,7 +283,7 @@ pub async fn get_trains_from_rzd(
                     date.clone(),
                     retry_counter - 1,
                 )
-                    .await;
+                .await;
             }
             return Err(format!("Invalid response code from rzd {}", r.status()));
         }
@@ -342,7 +348,10 @@ pub async fn get_trains_carriages_from_rzd(
     if retry_counter == -1 {
         return Err("Error on fetching info from rzd".to_string());
     }
-    let user_agents = UserAgentsBuilder::new().set_browsers(Browsers::new().set_chrome().set_edge().set_firefox()).build();
+    let user_agents = UserAgentsBuilder::new()
+        .set_browsers(Browsers::new().set_chrome().set_edge().set_firefox())
+        .cache(false)
+        .build();
     let client = reqwest::ClientBuilder::new()
         .cookie_store(true)
         .user_agent(user_agents.random())
@@ -390,7 +399,8 @@ pub async fn get_trains_carriages_from_rzd(
                 time0.clone(),
                 tnum0.clone(),
                 retry_counter - 1,
-            ).await
+            )
+            .await;
         }
         return Err(format!("Invalid response code from rzd {}", r.status()));
     }
@@ -471,7 +481,8 @@ pub async fn get_trains_carriages_from_rzd(
                     time0.clone(),
                     tnum0.clone(),
                     retry_counter - 1,
-                ).await
+                )
+                .await;
             }
             return Err(format!("Invalid response code from rzd {}", r.status()));
         }
@@ -525,3 +536,5 @@ pub async fn get_trains_carriages_from_rzd(
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
 }
+
+//
