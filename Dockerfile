@@ -14,7 +14,6 @@ RUN rm src/*.rs
 
 # copy your source tree
 COPY ./src ./src
-COPY ./migrations ./migrations
 
 # build for release
 RUN rm ./target/release/deps/rzd_tg_bot*
