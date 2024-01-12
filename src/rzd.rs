@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::time::Duration;
 
+use tokio::sync::Mutex;
 use async_recursion::async_recursion;
-use fake_useragent::{Browsers, UserAgentsBuilder};
+use fake_useragent::{Browsers, UserAgentsBuilder, UserAgents};
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -13,6 +14,7 @@ const BASE_API_URL: &str = "https://ticket.rzd.ru/api/v1";
 const BASE_PASS_URL: &str = "https://pass.rzd.ru";
 const ROUTES_LAYER: usize = 5827;
 const CARRIEAGES_LAYER: usize = 5764;
+
 fn places_deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
@@ -78,6 +80,11 @@ pub struct GetRZDTrainsCarriagesListResponse {
 pub struct GetRZDTrainsCarriagesResponse {
     pub(crate) lst: Vec<GetRZDTrainsCarriagesListResponse>,
 }
+
+pub struct RZDApi {
+    ua: Mutex<UserAgents>
+}
+
 #[async_recursion]
 pub async fn get_rzd_point_codes(
     part_or_full_name: String,

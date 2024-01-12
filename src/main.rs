@@ -1,6 +1,6 @@
 mod rzd;
+mod db;
 
-use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::path::Path;
@@ -8,7 +8,6 @@ use std::path::Path;
 use chrono::NaiveDate;
 use env_logger;
 use log::LevelFilter;
-use teloxide::dispatching::dialogue::GetChatId;
 use teloxide::types::InputFile;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
@@ -83,6 +82,7 @@ async fn main() {
     let bot = Bot::from_env();
 
     log::info!("bot is starting");
+
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![InMemStorage::<State>::new()])
         .enable_ctrlc_handler()
