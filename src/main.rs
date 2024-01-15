@@ -2,7 +2,6 @@ mod rzd;
 mod db;
 
 use std::env;
-use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -16,6 +15,8 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
+use speedb::{DB, Options};
+use crate::db::RZDDb;
 use crate::rzd::RZDApi;
 
 const CUPE_TYPE: &str = "купе";
@@ -74,8 +75,13 @@ async fn main() {
 
     if !Path::exists(db_path.clone().as_ref()) {
         log::warn!("DB_PATH {db_path} does not exists, creating");
-        File::create(db_path.clone()).expect("Cant create db file");
     }
+
+    let mut options = Options::default();
+    options.create_if_missing(true);
+    let db = DB::open(&options, db_path).expect("cant create db");
+
+    let rzd_db = RZDDb::new(db);
 
     let bot = Bot::from_env();
 
@@ -83,7 +89,7 @@ async fn main() {
 
     let rzd_api = rzd::RZDApi::new();
     Dispatcher::builder(bot, schema())
-        .dependencies(dptree::deps![InMemStorage::<State>::new(), rzd_api])
+        .dependencies(dptree::deps![InMemStorage::<State>::new(), rzd_api, rzd_db])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -457,7 +463,7 @@ async fn receive_train_idx(
     Ok(())
 }
 
-async fn poll_day(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
+async fn poll_day(bot: Bot, dialogue: RZDDialogue,rzd_db: Arc<RZDDb>, q: CallbackQuery) -> HandlerResult {
     bot.answer_callback_query(q.id).await?;
     if let Some(data) = &q.data {
         let splitted_data = data.split('_').collect::<Vec<&str>>();
@@ -470,7 +476,7 @@ async fn poll_day(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerR
     Ok(())
 }
 
-async fn poll_train(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
+async fn poll_train(bot: Bot, dialogue: RZDDialogue,rzd_db: Arc<RZDDb>, q: CallbackQuery) -> HandlerResult {
     bot.answer_callback_query(q.id).await?;
     Ok(())
 }
