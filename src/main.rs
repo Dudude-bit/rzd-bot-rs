@@ -4,6 +4,7 @@ mod db;
 use std::env;
 use std::fs::File;
 use std::path::Path;
+use std::sync::Arc;
 
 use chrono::NaiveDate;
 use env_logger;
@@ -15,8 +16,7 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
-
-use crate::rzd::{get_rzd_point_codes, get_trains_carriages_from_rzd, get_trains_from_rzd};
+use crate::rzd::RZDApi;
 
 const CUPE_TYPE: &str = "купе";
 
@@ -77,14 +77,13 @@ async fn main() {
         File::create(db_path.clone()).expect("Cant create db file");
     }
 
-    log::info!("migrations has been executed");
-
     let bot = Bot::from_env();
 
     log::info!("bot is starting");
 
+    let rzd_api = rzd::RZDApi::new();
     Dispatcher::builder(bot, schema())
-        .dependencies(dptree::deps![InMemStorage::<State>::new()])
+        .dependencies(dptree::deps![InMemStorage::<State>::new(), rzd_api])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -136,10 +135,10 @@ async fn cancel(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult 
     Ok(())
 }
 
-async fn receive_from_point(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult {
+async fn receive_from_point(bot: Bot, dialogue: RZDDialogue, rzd_api: Arc<RZDApi>, msg: Message) -> HandlerResult {
     match msg.text() {
         Some(text) => {
-            let codes = get_rzd_point_codes(text.into(), 5).await;
+            let codes = rzd_api.get_rzd_point_codes(text.into(), 5).await;
             match codes {
                 Ok(codes) => {
                     let mut reply_markup = Vec::new();
@@ -192,12 +191,13 @@ async fn choose_from_point_code(
 async fn receive_to_point(
     bot: Bot,
     dialogue: RZDDialogue,
+    rzd_api: Arc<RZDApi>,
     from_point_code: String,
     msg: Message,
 ) -> HandlerResult {
     match msg.text() {
         Some(text) => {
-            let codes = get_rzd_point_codes(text.into(), 5).await;
+            let codes = rzd_api.get_rzd_point_codes(text.into(), 5).await;
             match codes {
                 Ok(codes) => {
                     let mut reply_markup = Vec::new();
@@ -254,6 +254,7 @@ async fn choose_to_point_code(
 async fn receive_date(
     bot: Bot,
     dialogue: RZDDialogue,
+    rzd_api: Arc<RZDApi>,
     (from_point_code, to_point_code): (String, String),
     msg: Message,
 ) -> HandlerResult {
@@ -263,7 +264,7 @@ async fn receive_date(
             match date {
                 Ok(date) => {
                     // TODO check if date not less than now
-                    let trains = get_trains_from_rzd(
+                    let trains = rzd_api.get_trains_from_rzd(
                         from_point_code.clone(),
                         to_point_code.clone(),
                         date.format("%d.%m.%Y").to_string(),
@@ -351,6 +352,7 @@ async fn receive_date(
 async fn receive_train_idx(
     bot: Bot,
     dialogue: RZDDialogue,
+    rzd_api: Arc<RZDApi>,
     trains: Vec<Train>,
     msg: Message,
 ) -> HandlerResult {
@@ -371,7 +373,7 @@ async fn receive_train_idx(
                 return Ok(());
             }
             let train = train.unwrap();
-            let carriages = get_trains_carriages_from_rzd(
+            let carriages = rzd_api.get_trains_carriages_from_rzd(
                 train.code0.clone(),
                 train.code1.clone(),
                 train.dt0.clone(),
