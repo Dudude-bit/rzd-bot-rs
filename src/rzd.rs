@@ -3,13 +3,13 @@ use std::default::Default;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::Mutex;
 use async_recursion::async_recursion;
-use fake_useragent::{Browsers, UserAgentsBuilder, UserAgents};
+use fake_useragent::{Browsers, UserAgents, UserAgentsBuilder};
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
+use tokio::sync::Mutex;
 
 const BASE_API_URL: &str = "https://ticket.rzd.ru/api/v1";
 const BASE_PASS_URL: &str = "https://pass.rzd.ru";
@@ -83,10 +83,9 @@ pub struct GetRZDTrainsCarriagesResponse {
 }
 
 pub struct RZDApi {
-    ua: Mutex<UserAgents>
+    ua: Mutex<UserAgents>,
 }
 impl RZDApi {
-
     #[must_use]
     pub fn new() -> Arc<Self> {
         let user_agents = UserAgentsBuilder::new()
@@ -94,7 +93,7 @@ impl RZDApi {
             .cache(false)
             .build();
 
-        return Arc::new(Self {
+        Arc::new(Self {
             ua: Mutex::from(user_agents),
         })
     }
@@ -122,9 +121,11 @@ impl RZDApi {
             ("Language", "ru"),
             ("TransportType", "rail"),
         ];
-        let url =
-            reqwest::Url::parse_with_params(&(BASE_API_URL.to_owned() + "/suggests"), &query_params)
-                .unwrap();
+        let url = reqwest::Url::parse_with_params(
+            &(BASE_API_URL.to_owned() + "/suggests"),
+            &query_params,
+        )
+        .unwrap();
         let result = client
             .get(url)
             .header(ACCEPT, "application/json")
@@ -132,14 +133,18 @@ impl RZDApi {
             .await;
 
         if result.is_err() {
-            return self.get_rzd_point_codes(part_or_full_name.clone(), retry_counter - 1).await;
+            return self
+                .get_rzd_point_codes(part_or_full_name.clone(), retry_counter - 1)
+                .await;
         }
 
         let r = result.unwrap();
         if r.status() != 200 {
             log::warn!("got {} from rzd in function get_rzd_point_codes with params: part_or_full_name = {}, retry_counter = {}", r.status(), part_or_full_name, retry_counter);
             if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
-                return self.get_rzd_point_codes(part_or_full_name.clone(), retry_counter - 1).await;
+                return self
+                    .get_rzd_point_codes(part_or_full_name.clone(), retry_counter - 1)
+                    .await;
             }
             return Err(format!("Invalid response code from rzd {}", r.status()));
         }
@@ -187,19 +192,20 @@ impl RZDApi {
             &(BASE_PASS_URL.to_owned() + "/timetable/public/ru"),
             &query_params,
         )
-            .unwrap();
+        .unwrap();
         let result = client
             .get(url)
             .header(ACCEPT, "application/json")
             .send()
             .await;
         if result.is_err() {
-            return self.get_trains_from_rzd(
-                point_from.clone(),
-                point_to.clone(),
-                date.clone(),
-                retry_counter - 1,
-            )
+            return self
+                .get_trains_from_rzd(
+                    point_from.clone(),
+                    point_to.clone(),
+                    date.clone(),
+                    retry_counter - 1,
+                )
                 .await;
         }
 
@@ -207,12 +213,13 @@ impl RZDApi {
         if r.status() != 200 {
             log::warn!("got {} from rzd in function get_trains_from_rzd with params: point_from = {}, point_to = {}, date = {}, retry_counter = {}", r.status(), point_from, point_to, date, retry_counter);
             if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
-                return self.get_trains_from_rzd(
-                    point_from.clone(),
-                    point_to.clone(),
-                    date.clone(),
-                    retry_counter - 1,
-                )
+                return self
+                    .get_trains_from_rzd(
+                        point_from.clone(),
+                        point_to.clone(),
+                        date.clone(),
+                        retry_counter - 1,
+                    )
                     .await;
             }
             return Err(format!("Invalid response code from rzd {}", r.status()));
@@ -239,12 +246,13 @@ impl RZDApi {
                 .unwrap_or(&json!(""))
                 .eq(&json!("FAIL"))
             {
-                return self.get_trains_from_rzd(
-                    point_from.clone(),
-                    point_to.clone(),
-                    date.clone(),
-                    retry_counter - 1,
-                )
+                return self
+                    .get_trains_from_rzd(
+                        point_from.clone(),
+                        point_to.clone(),
+                        date.clone(),
+                        retry_counter - 1,
+                    )
                     .await;
             }
             return match serde_json::from_str::<GetRZDTrainsResponse>(
@@ -266,7 +274,7 @@ impl RZDApi {
                 &(BASE_PASS_URL.to_owned() + "/timetable/public/ru"),
                 &query_params,
             )
-                .unwrap();
+            .unwrap();
 
             let result = client
                 .post(url)
@@ -277,12 +285,13 @@ impl RZDApi {
                 .await;
 
             if result.is_err() {
-                return self.get_trains_from_rzd(
-                    point_from.clone(),
-                    point_to.clone(),
-                    date.clone(),
-                    retry_counter - 1,
-                )
+                return self
+                    .get_trains_from_rzd(
+                        point_from.clone(),
+                        point_to.clone(),
+                        date.clone(),
+                        retry_counter - 1,
+                    )
                     .await;
             }
 
@@ -290,12 +299,13 @@ impl RZDApi {
             if r.status() != 200 {
                 log::warn!("got {} from rzd in function get_trains_from_rzd with params: point_from = {}, point_to = {}, date = {}, retry_counter = {}", r.status(), point_from, point_to, date, retry_counter);
                 if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
-                    return self.get_trains_from_rzd(
-                        point_from.clone(),
-                        point_to.clone(),
-                        date.clone(),
-                        retry_counter - 1,
-                    )
+                    return self
+                        .get_trains_from_rzd(
+                            point_from.clone(),
+                            point_to.clone(),
+                            date.clone(),
+                            retry_counter - 1,
+                        )
                         .await;
                 }
                 return Err(format!("Invalid response code from rzd {}", r.status()));
@@ -323,12 +333,13 @@ impl RZDApi {
                     .unwrap_or(&json!("".to_string()))
                     .eq(&json!("FAIL"))
                 {
-                    return self.get_trains_from_rzd(
-                        point_from.clone(),
-                        point_to.clone(),
-                        date.clone(),
-                        retry_counter - 1,
-                    )
+                    return self
+                        .get_trains_from_rzd(
+                            point_from.clone(),
+                            point_to.clone(),
+                            date.clone(),
+                            retry_counter - 1,
+                        )
                         .await;
                 }
                 return match serde_json::from_str::<GetRZDTrainsResponse>(
@@ -380,29 +391,15 @@ impl RZDApi {
             &(BASE_PASS_URL.to_owned() + "/timetable/public/ru"),
             &query_params,
         )
-            .unwrap();
+        .unwrap();
         let result = client
             .get(url)
             .header(ACCEPT, "application/json")
             .send()
             .await;
         if result.is_err() {
-            return self.get_trains_carriages_from_rzd(
-                point_from.clone(),
-                point_to.clone(),
-                dt0.clone(),
-                time0.clone(),
-                tnum0.clone(),
-                retry_counter - 1,
-            )
-                .await;
-        }
-
-        let r = result.unwrap();
-        if r.status() != 200 {
-            log::warn!("got {} from rzd in function get_trains_carriages_from_rzd with params: point_from = {}, point_to = {}, dt0 = {}, time0 = {}, tnum0 = {}, retry_counter = {}", r.status(), point_from, point_to, dt0, time0, tnum0, retry_counter);
-            if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
-                return self.get_trains_carriages_from_rzd(
+            return self
+                .get_trains_carriages_from_rzd(
                     point_from.clone(),
                     point_to.clone(),
                     dt0.clone(),
@@ -410,6 +407,22 @@ impl RZDApi {
                     tnum0.clone(),
                     retry_counter - 1,
                 )
+                .await;
+        }
+
+        let r = result.unwrap();
+        if r.status() != 200 {
+            log::warn!("got {} from rzd in function get_trains_carriages_from_rzd with params: point_from = {}, point_to = {}, dt0 = {}, time0 = {}, tnum0 = {}, retry_counter = {}", r.status(), point_from, point_to, dt0, time0, tnum0, retry_counter);
+            if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+                return self
+                    .get_trains_carriages_from_rzd(
+                        point_from.clone(),
+                        point_to.clone(),
+                        dt0.clone(),
+                        time0.clone(),
+                        tnum0.clone(),
+                        retry_counter - 1,
+                    )
                     .await;
             }
             return Err(format!("Invalid response code from rzd {}", r.status()));
@@ -436,14 +449,15 @@ impl RZDApi {
                 .unwrap_or(&json!(""))
                 .eq(&json!("FAIL"))
             {
-                return self.get_trains_carriages_from_rzd(
-                    point_from.clone(),
-                    point_to.clone(),
-                    dt0.clone(),
-                    time0.clone(),
-                    tnum0.clone(),
-                    retry_counter - 1,
-                )
+                return self
+                    .get_trains_carriages_from_rzd(
+                        point_from.clone(),
+                        point_to.clone(),
+                        dt0.clone(),
+                        time0.clone(),
+                        tnum0.clone(),
+                        retry_counter - 1,
+                    )
                     .await;
             }
             return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(
@@ -469,22 +483,8 @@ impl RZDApi {
                 .await;
 
             if result.is_err() {
-                return self.get_trains_carriages_from_rzd(
-                    point_from.clone(),
-                    point_to.clone(),
-                    dt0.clone(),
-                    time0.clone(),
-                    tnum0.clone(),
-                    retry_counter - 1,
-                )
-                    .await;
-            }
-
-            let r = result.unwrap();
-            if r.status() != 200 {
-                log::warn!("got {} from rzd in function get_trains_carriages_from_rzd with params: point_from = {}, point_to = {}, dt0 = {}, time0 = {}, tnum0 = {}, retry_counter = {}", r.status(), point_from, point_to, dt0, time0, tnum0, retry_counter);
-                if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
-                    return self.get_trains_carriages_from_rzd(
+                return self
+                    .get_trains_carriages_from_rzd(
                         point_from.clone(),
                         point_to.clone(),
                         dt0.clone(),
@@ -492,6 +492,22 @@ impl RZDApi {
                         tnum0.clone(),
                         retry_counter - 1,
                     )
+                    .await;
+            }
+
+            let r = result.unwrap();
+            if r.status() != 200 {
+                log::warn!("got {} from rzd in function get_trains_carriages_from_rzd with params: point_from = {}, point_to = {}, dt0 = {}, time0 = {}, tnum0 = {}, retry_counter = {}", r.status(), point_from, point_to, dt0, time0, tnum0, retry_counter);
+                if r.status().as_u16() == StatusCode::FORBIDDEN.as_u16() {
+                    return self
+                        .get_trains_carriages_from_rzd(
+                            point_from.clone(),
+                            point_to.clone(),
+                            dt0.clone(),
+                            time0.clone(),
+                            tnum0.clone(),
+                            retry_counter - 1,
+                        )
                         .await;
                 }
                 return Err(format!("Invalid response code from rzd {}", r.status()));
@@ -519,14 +535,15 @@ impl RZDApi {
                     .unwrap_or(&json!("".to_string()))
                     .eq(&json!("FAIL"))
                 {
-                    return self.get_trains_carriages_from_rzd(
-                        point_from.clone(),
-                        point_to.clone(),
-                        dt0.clone(),
-                        time0.clone(),
-                        tnum0.clone(),
-                        retry_counter - 1,
-                    )
+                    return self
+                        .get_trains_carriages_from_rzd(
+                            point_from.clone(),
+                            point_to.clone(),
+                            dt0.clone(),
+                            time0.clone(),
+                            tnum0.clone(),
+                            retry_counter - 1,
+                        )
                         .await;
                 }
                 return match serde_json::from_str::<GetRZDTrainsCarriagesResponse>(
@@ -547,6 +564,5 @@ impl RZDApi {
         }
     }
 }
-
 
 //

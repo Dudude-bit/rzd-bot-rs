@@ -1,15 +1,15 @@
+use speedb::DB;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use speedb::DB;
 pub struct RZDDb {
-    inner: Mutex<DB>
+    inner: Mutex<DB>,
 }
 
 impl RZDDb {
     #[must_use]
     pub fn new(db: DB) -> Arc<Self> {
-        Arc::new(Self{
+        Arc::new(Self {
             inner: Mutex::new(db),
         })
     }

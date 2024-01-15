@@ -3,7 +3,7 @@ FROM rust:1.75-slim-buster as build
 # create a new empty shell project
 RUN USER=root cargo new --bin rzd_tg_bot
 WORKDIR /rzd_tg_bot
-RUN apt-get update && apt-get install -y pkg-config libssl-dev
+RUN apt-get update && apt-get install -y pkg-config libssl-dev libclang-dev
 # copy over your manifests
 COPY ./Cargo.lock ./Cargo.lock
 COPY ./Cargo.toml ./Cargo.toml

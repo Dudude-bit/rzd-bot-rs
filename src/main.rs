@@ -1,13 +1,15 @@
-mod rzd;
 mod db;
+mod rzd;
 
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::db::RZDDb;
+use crate::rzd::RZDApi;
 use chrono::NaiveDate;
-use env_logger;
 use log::LevelFilter;
+use speedb::{Options, DB};
 use teloxide::types::InputFile;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
@@ -15,9 +17,6 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
-use speedb::{DB, Options};
-use crate::db::RZDDb;
-use crate::rzd::RZDApi;
 
 const CUPE_TYPE: &str = "купе";
 
@@ -141,7 +140,12 @@ async fn cancel(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult 
     Ok(())
 }
 
-async fn receive_from_point(bot: Bot, dialogue: RZDDialogue, rzd_api: Arc<RZDApi>, msg: Message) -> HandlerResult {
+async fn receive_from_point(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    rzd_api: Arc<RZDApi>,
+    msg: Message,
+) -> HandlerResult {
     match msg.text() {
         Some(text) => {
             let codes = rzd_api.get_rzd_point_codes(text.into(), 5).await;
@@ -270,13 +274,14 @@ async fn receive_date(
             match date {
                 Ok(date) => {
                     // TODO check if date not less than now
-                    let trains = rzd_api.get_trains_from_rzd(
-                        from_point_code.clone(),
-                        to_point_code.clone(),
-                        date.format("%d.%m.%Y").to_string(),
-                        5,
-                    )
-                    .await;
+                    let trains = rzd_api
+                        .get_trains_from_rzd(
+                            from_point_code.clone(),
+                            to_point_code.clone(),
+                            date.format("%d.%m.%Y").to_string(),
+                            5,
+                        )
+                        .await;
                     match trains {
                         Ok(trains) => {
                             let mut trains_state: Vec<Train> = Vec::new();
@@ -379,15 +384,16 @@ async fn receive_train_idx(
                 return Ok(());
             }
             let train = train.unwrap();
-            let carriages = rzd_api.get_trains_carriages_from_rzd(
-                train.code0.clone(),
-                train.code1.clone(),
-                train.dt0.clone(),
-                train.time0.clone(),
-                train.tnum0.clone(),
-                5,
-            )
-            .await;
+            let carriages = rzd_api
+                .get_trains_carriages_from_rzd(
+                    train.code0.clone(),
+                    train.code1.clone(),
+                    train.dt0.clone(),
+                    train.time0.clone(),
+                    train.tnum0.clone(),
+                    5,
+                )
+                .await;
             match carriages {
                 Ok(v) => {
                     let mut message_text: String = String::new();
@@ -463,7 +469,12 @@ async fn receive_train_idx(
     Ok(())
 }
 
-async fn poll_day(bot: Bot, dialogue: RZDDialogue,rzd_db: Arc<RZDDb>, q: CallbackQuery) -> HandlerResult {
+async fn poll_day(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    rzd_db: Arc<RZDDb>,
+    q: CallbackQuery,
+) -> HandlerResult {
     bot.answer_callback_query(q.id).await?;
     if let Some(data) = &q.data {
         let splitted_data = data.split('_').collect::<Vec<&str>>();
@@ -476,7 +487,12 @@ async fn poll_day(bot: Bot, dialogue: RZDDialogue,rzd_db: Arc<RZDDb>, q: Callbac
     Ok(())
 }
 
-async fn poll_train(bot: Bot, dialogue: RZDDialogue,rzd_db: Arc<RZDDb>, q: CallbackQuery) -> HandlerResult {
+async fn poll_train(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    rzd_db: Arc<RZDDb>,
+    q: CallbackQuery,
+) -> HandlerResult {
     bot.answer_callback_query(q.id).await?;
     Ok(())
 }
