@@ -150,20 +150,20 @@ async fn tasks(bot: Bot, dialogue: RZDDialogue, rzd_db: Arc<RZDDb>, msg: Message
     let tasks = rzd_db.list_tasks().await;
     match tasks {
         Ok(tasks) => {
-            let mut reply_markup = InlineKeyboardMarkup::default();
             for task in tasks.iter() {
-                reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
-                    task.0.clone(),
-                    task.0.clone(),
-                )]);
-            }
-
-            if reply_markup.clone().inline_keyboard.is_empty() {
-                bot.send_message(msg.chat.id, "No tasks").await?;
-            } else {
-                bot.send_message(msg.chat.id, "Tasks:")
-                    .reply_markup(reply_markup)
-                    .await?;
+                let mut text = String::new();
+                match task.1.get("type").unwrap_or(&"".to_string()).as_str() {
+                    "day" => {
+                        text = String::from(format!("Проверка конкретного дня:\nId: {}\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата: {}", task.0, task.1.get("from_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("to_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("date").unwrap_or(&"UNKNOWN".to_string())));
+                    }
+                    "train" => {
+                        text = String::from("Проверка конкретного поезда:\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата отправления: {}\nВремя отправления: {}\n Номер поезда отправления: {}"); // Переделать под получение самого населенного пункта
+                    }
+                    _ => {
+                        text = String::from(format!("Неизвестный тип задачи:\nId: {}", task.0));
+                    }
+                }
+                bot.send_message(msg.chat.id, text).await?;
             }
         }
         Err(err) => {
