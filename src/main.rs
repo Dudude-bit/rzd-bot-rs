@@ -1,6 +1,7 @@
 mod db;
 mod rzd;
 
+use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
@@ -10,13 +11,16 @@ use crate::rzd::RZDApi;
 use chrono::NaiveDate;
 use log::LevelFilter;
 use speedb::{Options, DB};
+use teloxide::dispatching::dialogue::GetChatId;
 use teloxide::types::InputFile;
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
+    repl,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
+use teloxide::types::TargetMessage::Inline;
 
 const CUPE_TYPE: &str = "купе";
 
@@ -28,6 +32,7 @@ type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 enum Command {
     Start,
     Cancel,
+    Tasks,
     Niggers,
     Dimok,
     Ss,
@@ -101,6 +106,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Start].endpoint(start))
         .branch(case![Command::Cancel].endpoint(cancel))
+        .branch(case![Command::Tasks].endpoint(tasks))
         .branch(case![Command::Niggers].endpoint(niggers))
         .branch(case![Command::Dimok].endpoint(dimok))
         .branch(case![Command::Ss].endpoint(ss));
@@ -140,6 +146,34 @@ async fn cancel(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult 
     Ok(())
 }
 
+async fn tasks(bot: Bot, dialogue: RZDDialogue, rzd_db: Arc<RZDDb>, msg: Message) -> HandlerResult {
+    let tasks = rzd_db.list_tasks().await;
+    match tasks {
+        Ok(tasks) => {
+            let mut reply_markup = InlineKeyboardMarkup::default();
+            for task in tasks.iter() {
+                reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
+                    task.0.clone(),
+                    task.0.clone(),
+                )]);
+            }
+
+            if reply_markup.clone().inline_keyboard.is_empty() {
+                bot.send_message(msg.chat.id, "No tasks").await?;
+            } else {
+                bot.send_message(msg.chat.id, "Tasks:")
+                    .reply_markup(reply_markup)
+                    .await?;
+            }
+        }
+        Err(err) => {
+            bot.send_message(msg.chat.id, format!("Error on getting tasks {:?}", err))
+                .await?;
+        }
+    }
+    Ok(())
+}
+
 async fn receive_from_point(
     bot: Bot,
     dialogue: RZDDialogue,
@@ -151,15 +185,15 @@ async fn receive_from_point(
             let codes = rzd_api.get_rzd_point_codes(text.into(), 5).await;
             match codes {
                 Ok(codes) => {
-                    let mut reply_markup = Vec::new();
+                    let mut reply_markup = InlineKeyboardMarkup::default();
                     for code in codes.iter().clone() {
-                        reply_markup.push(InlineKeyboardButton::callback(
+                        reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
                             code.name.clone(),
                             code.code.clone(),
-                        ))
+                        )]);
                     }
                     bot.send_message(msg.chat.id, "Choose from point")
-                        .reply_markup(InlineKeyboardMarkup::new([reply_markup]))
+                        .reply_markup(reply_markup)
                         .await?;
                     dialogue.update(State::ChooseFromPointCode {}).await?;
                 }
@@ -210,15 +244,15 @@ async fn receive_to_point(
             let codes = rzd_api.get_rzd_point_codes(text.into(), 5).await;
             match codes {
                 Ok(codes) => {
-                    let mut reply_markup = Vec::new();
+                    let mut reply_markup = InlineKeyboardMarkup::default();
                     for code in codes.iter().clone() {
-                        reply_markup.push(InlineKeyboardButton::callback(
+                        reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
                             code.name.clone(),
                             code.code.clone(),
-                        ))
+                        )]);
                     }
                     bot.send_message(msg.chat.id, "Choose to point")
-                        .reply_markup(InlineKeyboardMarkup::new([reply_markup]))
+                        .reply_markup(reply_markup)
                         .await?;
                     dialogue
                         .update(State::ChooseToPointCode { from_point_code })
@@ -312,16 +346,16 @@ async fn receive_date(
                                 bot.send_message(msg.chat.id, "Not found. Please type /start to try again. Current dialogue reseted").await?;
                                 dialogue.reset().await?;
                             } else {
-                                let mut reply_markup = Vec::new();
-                                reply_markup.push(InlineKeyboardButton::callback(
+                                let mut reply_markup = InlineKeyboardMarkup::default();
+                                reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
                                     "Poll this day",
                                     format!(
                                         "{from_point_code}_{to_point_code}_{}",
                                         date.format("%d.%m.%Y").to_string()
                                     ),
-                                ));
+                                )]);
                                 bot.send_message(msg.chat.id, message_text)
-                                    .reply_markup(InlineKeyboardMarkup::new([reply_markup]))
+                                    .reply_markup(reply_markup)
                                     .await?;
                                 dialogue
                                     .update(State::ChooseTrain {
@@ -478,10 +512,30 @@ async fn poll_day(
     bot.answer_callback_query(q.id).await?;
     if let Some(data) = &q.data {
         let splitted_data = data.split('_').collect::<Vec<&str>>();
-        println!("{:?}", splitted_data);
         if splitted_data.len() != 3 {
             bot.send_message(dialogue.chat_id(), "Invalid length of callback data")
                 .await?;
+        }
+        let created_task = rzd_db
+            .create_task(HashMap::from([
+                ("from_point_code".to_string(), splitted_data[0].to_string()),
+                ("to_point_code".to_string(), splitted_data[1].to_string()),
+                ("date".to_string(), splitted_data[2].to_string()),
+                ("type".to_string(), "day".to_string()),
+            ]))
+            .await;
+        match created_task {
+            Ok(task_id) => {
+                bot.send_message(
+                    dialogue.chat_id(),
+                    format!("Created task with id {task_id}"),
+                )
+                .await?;
+            }
+            Err(err) => {
+                bot.send_message(dialogue.chat_id(), format!("Cant create task {err}"))
+                    .await?;
+            }
         }
     }
     Ok(())
