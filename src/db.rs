@@ -23,7 +23,7 @@ impl RZDDb {
         if data_slice.is_err() {
             return Err(format!("cant serialize data {:?}", data_slice));
         }
-        return match self
+        match self
             .inner
             .lock()
             .await
@@ -31,14 +31,14 @@ impl RZDDb {
         {
             Ok(_) => Ok(key),
             Err(err) => Err(err.to_string()),
-        };
+        }
     }
 
     pub async fn delete_task_by_id(&self, task_id: String) -> Result<String, String> {
-        return match self.inner.lock().await.delete(task_id.clone()) {
+        match self.inner.lock().await.delete(task_id.clone()) {
             Ok(()) => Ok(task_id),
             Err(err) => Err(err.to_string()),
-        };
+        }
     }
 
     // pub async fn get_task_by_id(&self, task_id: String) -> Result<HashMap<String, String>, String> {
@@ -71,6 +71,6 @@ impl RZDDb {
             }
         }
 
-        return Ok(results);
+        Ok(results)
     }
 }

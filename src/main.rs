@@ -11,16 +11,14 @@ use crate::rzd::RZDApi;
 use chrono::NaiveDate;
 use log::LevelFilter;
 use speedb::{Options, DB};
-use teloxide::dispatching::dialogue::GetChatId;
 use teloxide::types::InputFile;
+
 use teloxide::{
     dispatching::{dialogue, dialogue::InMemStorage, UpdateHandler},
     prelude::*,
-    repl,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
-use teloxide::types::TargetMessage::Inline;
 
 const CUPE_TYPE: &str = "купе";
 
@@ -146,21 +144,22 @@ async fn cancel(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult 
     Ok(())
 }
 
-async fn tasks(bot: Bot, dialogue: RZDDialogue, rzd_db: Arc<RZDDb>, msg: Message) -> HandlerResult {
+async fn tasks(bot: Bot, _dialogue: RZDDialogue, rzd_db: Arc<RZDDb>, msg: Message) -> HandlerResult {
     let tasks = rzd_db.list_tasks().await;
     match tasks {
         Ok(tasks) => {
             for task in tasks.iter() {
-                let mut text = String::new();
+                let mut text: String;
                 match task.1.get("type").unwrap_or(&"".to_string()).as_str() {
                     "day" => {
-                        text = String::from(format!("Проверка конкретного дня:\nId: {}\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата: {}", task.0, task.1.get("from_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("to_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("date").unwrap_or(&"UNKNOWN".to_string())));
+                        text = format!("Проверка конкретного дня:\nId: {}\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата: {}", task.0, task.1.get("from_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("to_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("date").unwrap_or(&"UNKNOWN".to_string()));
                     }
                     "train" => {
-                        text = String::from("Проверка конкретного поезда:\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата отправления: {}\nВремя отправления: {}\n Номер поезда отправления: {}"); // Переделать под получение самого населенного пункта
+                        text = String::from("Проверка конкретного поезда:\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата отправления: {}\nВремя отправления: {}\n Номер поезда отправления: {}");
+                        // Переделать под получение самого населенного пункта
                     }
                     _ => {
-                        text = String::from(format!("Неизвестный тип задачи:\nId: {}", task.0));
+                        text = format!("Неизвестный тип задачи:\nId: {}", task.0);
                     }
                 }
                 bot.send_message(msg.chat.id, text).await?;
@@ -187,10 +186,13 @@ async fn receive_from_point(
                 Ok(codes) => {
                     let mut reply_markup = InlineKeyboardMarkup::default();
                     for code in codes.iter().clone() {
-                        reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
-                            code.name.clone(),
-                            code.code.clone(),
-                        )]);
+                        reply_markup =
+                            reply_markup
+                                .clone()
+                                .append_row([InlineKeyboardButton::callback(
+                                    code.name.clone(),
+                                    code.code.clone(),
+                                )]);
                     }
                     bot.send_message(msg.chat.id, "Choose from point")
                         .reply_markup(reply_markup)
@@ -246,10 +248,13 @@ async fn receive_to_point(
                 Ok(codes) => {
                     let mut reply_markup = InlineKeyboardMarkup::default();
                     for code in codes.iter().clone() {
-                        reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
-                            code.name.clone(),
-                            code.code.clone(),
-                        )]);
+                        reply_markup =
+                            reply_markup
+                                .clone()
+                                .append_row([InlineKeyboardButton::callback(
+                                    code.name.clone(),
+                                    code.code.clone(),
+                                )]);
                     }
                     bot.send_message(msg.chat.id, "Choose to point")
                         .reply_markup(reply_markup)
@@ -347,13 +352,15 @@ async fn receive_date(
                                 dialogue.reset().await?;
                             } else {
                                 let mut reply_markup = InlineKeyboardMarkup::default();
-                                reply_markup = reply_markup.clone().append_row([InlineKeyboardButton::callback(
-                                    "Poll this day",
-                                    format!(
-                                        "{from_point_code}_{to_point_code}_{}",
-                                        date.format("%d.%m.%Y").to_string()
+                                reply_markup = reply_markup.clone().append_row([
+                                    InlineKeyboardButton::callback(
+                                        "Poll this day",
+                                        format!(
+                                            "{from_point_code}_{to_point_code}_{}",
+                                            date.format("%d.%m.%Y")
+                                        ),
                                     ),
-                                )]);
+                                ]);
                                 bot.send_message(msg.chat.id, message_text)
                                     .reply_markup(reply_markup)
                                     .await?;
@@ -543,8 +550,8 @@ async fn poll_day(
 
 async fn poll_train(
     bot: Bot,
-    dialogue: RZDDialogue,
-    rzd_db: Arc<RZDDb>,
+    _dialogue: RZDDialogue,
+    _rzd_db: Arc<RZDDb>,
     q: CallbackQuery,
 ) -> HandlerResult {
     bot.answer_callback_query(q.id).await?;
