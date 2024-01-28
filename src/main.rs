@@ -1,8 +1,10 @@
 mod db;
 mod rzd;
+mod utils;
 
 use std::collections::HashMap;
-use std::env;
+use std::{env, thread};
+use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -19,6 +21,8 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
+use teloxide::dispatching::dialogue::GetChatId;
+use crate::utils::{make_start_keyboard, make_rzd_start_keyboard};
 
 const CUPE_TYPE: &str = "купе";
 
@@ -49,6 +53,9 @@ pub struct Train {
 pub enum State {
     #[default]
     Start,
+    ChooseService,
+    ChooseRZDService,
+    DeleteTask,
     ReceiveFromPoint,
     ChooseFromPointCode,
     ReceiveToPoint {
@@ -104,7 +111,6 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Start].endpoint(start))
         .branch(case![Command::Cancel].endpoint(cancel))
-        .branch(case![Command::Tasks].endpoint(tasks))
         .branch(case![Command::Niggers].endpoint(niggers))
         .branch(case![Command::Dimok].endpoint(dimok))
         .branch(case![Command::Ss].endpoint(ss));
@@ -123,6 +129,8 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(case![State::ChooseTrain { trains }].endpoint(receive_train_idx));
 
     let callback_query_handler = Update::filter_callback_query()
+        .branch(case![State::ChooseService].endpoint(choose_service))
+        .branch(case![State::ChooseRZDService].endpoint(choose_rzd_service))
         .branch(case![State::ChooseFromPointCode].endpoint(choose_from_point_code))
         .branch(case![State::ChooseToPointCode { from_point_code }].endpoint(choose_to_point_code))
         .branch(case![State::ChooseTrain { trains }].endpoint(poll_day));
@@ -133,41 +141,114 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 }
 
 async fn start(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult {
-    bot.send_message(msg.chat.id, "Write from point").await?;
-    dialogue.update(State::ReceiveFromPoint).await?;
+    bot.send_message(msg.chat.id, "Выберите сервис").reply_markup(make_start_keyboard()).await?;
+    dialogue.update(State::ChooseService).await?;
+    Ok(())
+}
+
+async fn choose_service(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
+    bot.answer_callback_query(q.id.clone()).await?;
+    if let Some(code) = &q.data {
+        match code.as_str() {
+            "rzd" => {
+                bot.send_message(q.chat_id().unwrap(), "Выберите действи").reply_markup(make_rzd_start_keyboard()).await?;
+                dialogue.update(State::ChooseRZDService).await?;
+            }
+            &_ => {
+                bot.send_message(q.chat_id().unwrap(), "Неизвестный сервис").await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn choose_rzd_service(bot: Bot, dialogue: RZDDialogue, q: CallbackQuery) -> HandlerResult {
+    bot.answer_callback_query(q.id.clone()).await?;
+    if let Some(code) = &q.data {
+        match code.as_str() {
+            "rzd_search" => {
+                bot.send_message(q.chat_id().unwrap(), "Напишите точку отправления").await?;
+                dialogue.update(State::ReceiveFromPoint).await?;
+            }
+            "rzd_tasks" => {
+
+            }
+            "rzd_return" => {
+                bot.send_message(q.chat_id().unwrap(), "Выберите сервис").reply_markup(make_start_keyboard()).await?;
+                dialogue.update(State::ChooseService).await?;
+            }
+            &_ => {
+                bot.send_message(q.chat_id().unwrap(), "Неизвестный сервис").await?;
+            }
+        }
+    }
     Ok(())
 }
 
 async fn cancel(bot: Bot, dialogue: RZDDialogue, msg: Message) -> HandlerResult {
     bot.send_message(msg.chat.id, "You canceled it").await?;
-    dialogue.reset().await?;
+    bot.send_message(msg.chat.id, "Выберите сервис").reply_markup(make_start_keyboard()).await?;
+    dialogue.update(State::ChooseService).await?;
     Ok(())
 }
 
-async fn tasks(bot: Bot, _dialogue: RZDDialogue, rzd_db: Arc<RZDDb>, msg: Message) -> HandlerResult {
+async fn tasks(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    rzd_db: Arc<RZDDb>,
+    msg: Message,
+) -> HandlerResult {
     let tasks = rzd_db.list_tasks().await;
     match tasks {
         Ok(tasks) => {
-            for task in tasks.iter() {
-                let mut text: String;
-                match task.1.get("type").unwrap_or(&"".to_string()).as_str() {
-                    "day" => {
-                        text = format!("Проверка конкретного дня:\nId: {}\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата: {}", task.0, task.1.get("from_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("to_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("date").unwrap_or(&"UNKNOWN".to_string()));
+            if tasks.len() == 0 {
+                bot.send_message(msg.chat.id, "Нет задач".to_string())
+                    .await?;
+            } else {
+                for task in tasks.iter() {
+                    let text: String;
+                    match task.1.get("type").unwrap_or(&"".to_string()).as_str() {
+                        "day" => {
+                            text = format!("Проверка конкретного дня:\nId: {}\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата: {}", task.0, task.1.get("from_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("to_point_code").unwrap_or(&"UNKNOWN".to_string()), task.1.get("date").unwrap_or(&"UNKNOWN".to_string()));
+                        }
+                        "train" => {
+                            text = String::from("Проверка конкретного поезда:\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата отправления: {}\nВремя отправления: {}\n Номер поезда отправления: {}");
+                            // Переделать под получение самого населенного пункта
+                        }
+                        _ => {
+                            text = format!("Неизвестный тип задачи:\nId: {}", task.0);
+                        }
                     }
-                    "train" => {
-                        text = String::from("Проверка конкретного поезда:\nКод пункта отправления: {}\nКод пункта прибытия: {}\nДата отправления: {}\nВремя отправления: {}\n Номер поезда отправления: {}");
-                        // Переделать под получение самого населенного пункта
-                    }
-                    _ => {
-                        text = format!("Неизвестный тип задачи:\nId: {}", task.0);
-                    }
+                    bot.send_message(msg.chat.id, text).reply_markup(InlineKeyboardMarkup::default().append_row([InlineKeyboardButton::callback(
+                        "Удалить задачу",
+                        task.0,
+                    )])).await?;
                 }
-                bot.send_message(msg.chat.id, text).await?;
+                dialogue.update(State::DeleteTask).await?;
             }
         }
         Err(err) => {
             bot.send_message(msg.chat.id, format!("Error on getting tasks {:?}", err))
                 .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn delete_task(
+    bot: Bot,
+    dialogue: RZDDialogue,
+    rzd_db: Arc<RZDDb>,
+    q: CallbackQuery,
+) -> HandlerResult {
+    if let Some(id) = &q.data {
+        match rzd_db.delete_task_by_id(id.to_string()).await {
+            Ok(id) => {
+                bot.send_message(q.chat_id().unwrap(), format!("Удалена задача с id: {id}")).await?;
+            }
+            Err(err) => {
+                bot.send_message(q.chat_id().unwrap(),format!("Ошибка при удалении задачи: {err}")).await?;
+            }
         }
     }
     Ok(())
@@ -194,7 +275,7 @@ async fn receive_from_point(
                                     code.code.clone(),
                                 )]);
                     }
-                    bot.send_message(msg.chat.id, "Choose from point")
+                    bot.send_message(msg.chat.id, "Выбери точку отправления")
                         .reply_markup(reply_markup)
                         .await?;
                     dialogue.update(State::ChooseFromPointCode {}).await?;
@@ -202,14 +283,14 @@ async fn receive_from_point(
                 Err(err) => {
                     bot.send_message(
                         msg.chat.id,
-                        format!("Error on getting rzd point codes {}", err),
+                        format!("Ошибка во время получения кодов отправления {}", err),
                     )
                     .await?;
                 }
             }
         }
         None => {
-            bot.send_message(msg.chat.id, "Send me plain text.").await?;
+            bot.send_message(msg.chat.id, "Отправь мне обычный текст").await?;
         }
     }
 
@@ -221,10 +302,9 @@ async fn choose_from_point_code(
     dialogue: RZDDialogue,
     q: CallbackQuery,
 ) -> HandlerResult {
-    bot.answer_callback_query(q.id).await?;
+    bot.answer_callback_query(q.id.clone()).await?;
     if let Some(code) = &q.data {
-        bot.send_message(dialogue.chat_id(), "Write to point")
-            .await?;
+        bot.send_message(q.chat_id().unwrap(), "Напишите точку прибытия").await?;
         dialogue
             .update(State::ReceiveToPoint {
                 from_point_code: code.into(),
@@ -256,7 +336,7 @@ async fn receive_to_point(
                                     code.code.clone(),
                                 )]);
                     }
-                    bot.send_message(msg.chat.id, "Choose to point")
+                    bot.send_message(msg.chat.id, "Выбери точку прибытия")
                         .reply_markup(reply_markup)
                         .await?;
                     dialogue
@@ -266,14 +346,14 @@ async fn receive_to_point(
                 Err(err) => {
                     bot.send_message(
                         msg.chat.id,
-                        format!("Error on getting rzd point codes {}", err),
+                        format!("Ошибка во время получения кодов прибытия {}", err),
                     )
                     .await?;
                 }
             }
         }
         None => {
-            bot.send_message(msg.chat.id, "Send me plain text.").await?;
+            bot.send_message(msg.chat.id, "Отправь мне обычный текст").await?;
         }
     }
 
@@ -288,7 +368,7 @@ async fn choose_to_point_code(
 ) -> HandlerResult {
     bot.answer_callback_query(q.id).await?;
     if let Some(code) = &q.data {
-        bot.send_message(dialogue.chat_id(), "Write a date in format(d.m.y)")
+        bot.send_message(dialogue.chat_id(), "Напиши мне дату в формате (день.месяц.год)")
             .await?;
         dialogue
             .update(State::ReceiveDate {
@@ -348,7 +428,7 @@ async fn receive_date(
                                 idx_counter += 1;
                             }
                             if message_text.is_empty() {
-                                bot.send_message(msg.chat.id, "Not found. Please type /start to try again. Current dialogue reseted").await?;
+                                bot.send_message(msg.chat.id, "Не найдено. Пожалуйста, напиши /start чтобы заново начать. Текущий диалог сброшен").await?;
                                 dialogue.reset().await?;
                             } else {
                                 let mut reply_markup = InlineKeyboardMarkup::default();
@@ -386,7 +466,7 @@ async fn receive_date(
                 Err(err) => {
                     bot.send_message(
                         msg.chat.id,
-                        format!("Error on parsing date {}. Current dialogue canceled", err),
+                        format!("Ошибка во время парсинга даты {}. Текущий диалог сброшен", err),
                     )
                     .await?;
                     dialogue.reset().await?;
@@ -394,7 +474,7 @@ async fn receive_date(
             }
         }
         None => {
-            bot.send_message(msg.chat.id, "Send me plain text.").await?;
+            bot.send_message(msg.chat.id, "Отправь мне обычный текст").await?;
         }
     }
 
@@ -412,14 +492,14 @@ async fn receive_train_idx(
         Some(idx) => {
             let idx: usize = idx.parse().unwrap_or(0);
             if idx == 0 {
-                bot.send_message(msg.chat.id, "Negative index. Current dialogue canceled")
+                bot.send_message(msg.chat.id, "Отрицательный индекс. Текущий диалог сброшен.")
                     .await?;
                 dialogue.reset().await?;
                 return Ok(());
             }
             let train = trains.get(idx - 1);
             if train.is_none() {
-                bot.send_message(msg.chat.id, "Invalid index. Current dialogue canceled")
+                bot.send_message(msg.chat.id, "Неправильный индекс. Текущий диалог сброшен")
                     .await?;
                 dialogue.reset().await?;
                 return Ok(());

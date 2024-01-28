@@ -41,10 +41,6 @@ impl RZDDb {
         }
     }
 
-    // pub async fn get_task_by_id(&self, task_id: String) -> Result<HashMap<String, String>, String> {
-    //
-    // }
-
     pub async fn list_tasks(&self) -> Result<HashMap<String, HashMap<String, String>>, String> {
         let mut results: HashMap<String, HashMap<String, String>> = HashMap::new();
         for r in self
