@@ -92,7 +92,6 @@ impl RZDApi {
             .set_browsers(Browsers::new().set_chrome().set_edge().set_firefox())
             .cache(false)
             .build();
-
         Arc::new(Self {
             ua: Mutex::from(user_agents),
         })
