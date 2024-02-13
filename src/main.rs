@@ -559,34 +559,34 @@ async fn receive_train_idx(
                             }
                         }
                     }
+                    let mut reply_markup = InlineKeyboardMarkup::default();
+                    reply_markup = reply_markup.clone().append_row([
+                        InlineKeyboardButton::callback(
+                            "Проверять этот поезд",
+                            format!(
+                                "{}_{}_{}_{}_{}",
+                                train.code0.clone(),
+                                train.code1.clone(),
+                                train.dt0.clone(),
+                                train.time0.clone(),
+                                train.tnum0.clone()
+                            ),
+                        ),
+                    ]);
+                    reply_markup = reply_markup.clone().append_row([
+                        InlineKeyboardButton::callback(
+                            "Не проверять этот поезд",
+                            "cancel"
+                        )
+                    ]);
                     if message_text.is_empty() {
                         bot.send_message(
                             msg.chat.id,
                             "Не найдено. Пожалуйста напишите /start , чтобы заново попробовать. Текущий диалог сброшен",
-                        )
+                        ).reply_markup(reply_markup)
                         .await?;
                         dialogue.reset().await?;
                     } else {
-                        let mut reply_markup = InlineKeyboardMarkup::default();
-                        reply_markup = reply_markup.clone().append_row([
-                            InlineKeyboardButton::callback(
-                                "Проверять этот поезд",
-                                format!(
-                                    "{}_{}_{}_{}_{}",
-                                    train.code0.clone(),
-                                    train.code1.clone(),
-                                    train.dt0.clone(),
-                                    train.time0.clone(),
-                                    train.tnum0.clone()
-                                ),
-                            ),
-                        ]);
-                        reply_markup = reply_markup.clone().append_row([
-                            InlineKeyboardButton::callback(
-                                "Не проверять этот поезд",
-                                "cancel"
-                            )
-                        ]);
                         bot.send_message(msg.chat.id, message_text + "Текущий диалог сброшен").reply_markup(
                             reply_markup
                         )
