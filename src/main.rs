@@ -94,9 +94,10 @@ async fn main() {
 
     let bot = Bot::from_env();
 
-    log::info!("bot is starting");
 
     let rzd_api = rzd::RZDApi::new();
+
+    log::info!("bot is starting");
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![InMemStorage::<State>::new(), rzd_api, rzd_db])
         .enable_ctrlc_handler()
@@ -366,9 +367,9 @@ async fn choose_to_point_code(
     from_point_code: String,
     q: CallbackQuery,
 ) -> HandlerResult {
-    bot.answer_callback_query(q.id).await?;
+    bot.answer_callback_query(q.clone().id).await?;
     if let Some(code) = &q.data {
-        bot.send_message(dialogue.chat_id(), "Напиши мне дату в формате (день.месяц.год)")
+        bot.send_message(q.chat_id().unwrap(), "Напиши мне дату в формате (день.месяц.год)")
             .await?;
         dialogue
             .update(State::ReceiveDate {
@@ -434,7 +435,7 @@ async fn receive_date(
                                 let mut reply_markup = InlineKeyboardMarkup::default();
                                 reply_markup = reply_markup.clone().append_row([
                                     InlineKeyboardButton::callback(
-                                        "Poll this day",
+                                        "Проверять этот день",
                                         format!(
                                             "{from_point_code}_{to_point_code}_{}",
                                             date.format("%d.%m.%Y")
@@ -561,12 +562,34 @@ async fn receive_train_idx(
                     if message_text.is_empty() {
                         bot.send_message(
                             msg.chat.id,
-                            "Not found. Please type /start to try again. Current dialogue reseted",
+                            "Не найдено. Пожалуйста напишите /start , чтобы заново попробовать. Текущий диалог сброшен",
                         )
                         .await?;
                         dialogue.reset().await?;
                     } else {
-                        bot.send_message(msg.chat.id, message_text + "Current dialogue reseted")
+                        let mut reply_markup = InlineKeyboardMarkup::default();
+                        reply_markup = reply_markup.clone().append_row([
+                            InlineKeyboardButton::callback(
+                                "Проверять этот поезд",
+                                format!(
+                                    "{}_{}_{}_{}_{}",
+                                    train.code0.clone(),
+                                    train.code1.clone(),
+                                    train.dt0.clone(),
+                                    train.time0.clone(),
+                                    train.tnum0.clone()
+                                ),
+                            ),
+                        ]);
+                        reply_markup = reply_markup.clone().append_row([
+                            InlineKeyboardButton::callback(
+                                "Не проверять этот поезд",
+                                "cancel"
+                            )
+                        ]);
+                        bot.send_message(msg.chat.id, message_text + "Текущий диалог сброшен").reply_markup(
+                            reply_markup
+                        )
                             .await?;
                         dialogue.reset().await?;
                     }
@@ -584,7 +607,7 @@ async fn receive_train_idx(
             }
         }
         None => {
-            bot.send_message(msg.chat.id, "Send me plain text.").await?;
+            bot.send_message(msg.chat.id, "Отправь мне обычный текст").await?;
         }
     }
     Ok(())
@@ -596,11 +619,11 @@ async fn poll_day(
     rzd_db: Arc<RZDDb>,
     q: CallbackQuery,
 ) -> HandlerResult {
-    bot.answer_callback_query(q.id).await?;
+    bot.answer_callback_query(q.id.clone()).await?;
     if let Some(data) = &q.data {
         let splitted_data = data.split('_').collect::<Vec<&str>>();
         if splitted_data.len() != 3 {
-            bot.send_message(dialogue.chat_id(), "Invalid length of callback data")
+            bot.send_message(q.chat_id().unwrap(), "Invalid length of callback")
                 .await?;
         }
         let created_task = rzd_db
@@ -614,13 +637,13 @@ async fn poll_day(
         match created_task {
             Ok(task_id) => {
                 bot.send_message(
-                    dialogue.chat_id(),
-                    format!("Created task with id {task_id}"),
+                    q.chat_id().unwrap(),
+                    format!("Создана задача с уникальный номером {task_id}"),
                 )
                 .await?;
             }
             Err(err) => {
-                bot.send_message(dialogue.chat_id(), format!("Cant create task {err}"))
+                bot.send_message(q.chat_id().unwrap(), format!("Cant create task {err}"))
                     .await?;
             }
         }
@@ -630,11 +653,45 @@ async fn poll_day(
 
 async fn poll_train(
     bot: Bot,
-    _dialogue: RZDDialogue,
-    _rzd_db: Arc<RZDDb>,
+    dialogue: RZDDialogue,
+    rzd_db: Arc<RZDDb>,
     q: CallbackQuery,
 ) -> HandlerResult {
-    bot.answer_callback_query(q.id).await?;
+    bot.answer_callback_query(q.id.clone()).await?;
+    if let Some(data) = &q.data {
+        if data == "cancel" {
+            dialogue.reset().await?;
+            bot.send_message(q.chat_id().unwrap(), "Текущий диалог сброшен").await?;
+        }
+        let splitted_data = data.split('_').collect::<Vec<&str>>();
+        if splitted_data.len() != 5 {
+            bot.send_message(q.chat_id().unwrap(), "Invalid length of callback data")
+                .await?;
+        }
+        let created_task = rzd_db
+            .create_task(HashMap::from([
+                ("from_point_code".to_string(), splitted_data[0].to_string()),
+                ("to_point_code".to_string(), splitted_data[1].to_string()),
+                ("date".to_string(), splitted_data[2].to_string()),
+                ("time".to_string(), splitted_data[3].to_string()),
+                ("tnum".to_string(), splitted_data[4].to_string()),
+                ("type".to_string(), "train".to_string()),
+            ]))
+            .await;
+        match created_task {
+            Ok(task_id) => {
+                bot.send_message(
+                    q.chat_id().unwrap(),
+                    format!("Создана задача с уникальный номером {task_id}"),
+                )
+                    .await?;
+            }
+            Err(err) => {
+                bot.send_message(q.chat_id().unwrap(), format!("Невозможно создать задачу {err}"))
+                    .await?;
+            }
+        }
+    }
     Ok(())
 }
 

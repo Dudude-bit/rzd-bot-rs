@@ -564,4 +564,6 @@ impl RZDApi {
     }
 }
 
-//
+fn filter_suitable_places(v: GetRZDTrainsCarriagesResponse) {
+
+}
